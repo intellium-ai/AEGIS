@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "aegis"
+version = "0.1.0"
+description = "Autonomous Embedded-Graph Intrusion Sentinel"
+authors = ["Jack <jack.smith@intellium.ai>"]
+readme = "README.md"
+packages = [{include = "aegis", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
