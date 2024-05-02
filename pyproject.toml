@@ -2,7 +2,7 @@
 name = "aegis"
 version = "0.1.0"
 description = "Autonomous Embedded-Graph Intrusion Sentinel"
-authors = ["Jack <jack.smith@intellium.ai>"]
+authors = ["johnno1011 <jonathan@intellium.ai>", "jacksmithy1 <jack.smith@intellium.ai>", "nifets.ai <stefan@intellium.ai>"]
 readme = "README.md"
 packages = [{include = "aegis", from = "src"}]
 
