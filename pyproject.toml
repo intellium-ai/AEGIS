@@ -7,8 +7,12 @@ readme = "README.md"
 packages = [{include = "aegis", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.9,<3.11"
+primaite = { git = "https://github.com/intellium-ai/primate.git", tag = "v1.0.0", extras= ["dev"] }
 
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.4"
 
 [build-system]
 requires = ["poetry-core"]
