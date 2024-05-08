@@ -88,7 +88,6 @@ class RandomAgent(BaseAlgorithm):
         :return: the model's action and the next hidden state
             (used in recurrent policies)
         """
-
         random_action = self.policy.predict(
             observation=observation,
             state=state,
