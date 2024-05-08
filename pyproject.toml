@@ -7,8 +7,15 @@ readme = "README.md"
 packages = [{include = "aegis", from = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.10"
-
+python = ">3.8,<3.11"
+setuptools = "66"
+wheel = "0.38.4"
+gym = "0.21.0"
+yawningtitan = {git = "git@github.com:intellium-ai/YAWNING-TITAN.git", tag = "1.0.0"}
+text-generation = "^0.7.0"
+pydantic = "^2.7.1"
+numpy = "1.23.4"
+ipywidgets = "^8.1.2"
 
 [build-system]
 requires = ["poetry-core"]
