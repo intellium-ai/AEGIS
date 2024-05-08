@@ -8,22 +8,30 @@ This can be a bit tricky, follow these steps exactly
 
 1. Install poetry as usual
 
-`curl -sSL https://install.python-poetry.org | python3 -`
+```
+curl -sSL https://install.python-poetry.org | python3 -
+```
 
 2. Add the following line to your `.bashrc` or `.zshrc`
 
-`export PATH="$HOME/.local/bin:$PATH"`
+```
+export PATH="$HOME/.local/bin:$PATH"
+```
 
 3. You can verify the installation has worked by reloading your shell and running
 
-`poetry --version`
+```
+poetry --version
+```
+
+4. Create your poetry environment.
 
 ```
 poetry env use $(which python3)
 poetry shell
 ```
 
-Verify `python` and `pip` are coming from your virtual environment by running `which python` and `which pip`. The path should look something like:
+Verify python and pip are coming from your virtual environment by running `which python` and `which pip`. The path should look something like:
 
 ```
 /home/$USER/.cache/pypoetry/virtualenvs/aegis-[something]-py3.10/bin/[python|pip]
