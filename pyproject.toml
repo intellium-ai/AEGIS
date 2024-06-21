@@ -8,7 +8,20 @@ packages = [{include = "aegis", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
+torch = {version = "^2.3.1+cu121", source = "pytorch-gpu-src"}
+transformers = "^4.41.2"
+torch-geometric = "^2.5.3"
+peft = "^0.11.1"
 
+
+[[tool.poetry.source]]
+name = "pytorch-gpu-src"
+url = "https://download.pytorch.org/whl/cu121"
+priority = "explicit"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.4"
 
 [build-system]
 requires = ["poetry-core"]
