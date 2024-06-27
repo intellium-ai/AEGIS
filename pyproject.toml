@@ -12,6 +12,7 @@ torch = {version = "^2.3.1+cu121", source = "pytorch-gpu-src"}
 transformers = "^4.41.2"
 torch-geometric = "^2.5.3"
 peft = "^0.11.1"
+datasets = "^2.20.0"
 
 
 [[tool.poetry.source]]
