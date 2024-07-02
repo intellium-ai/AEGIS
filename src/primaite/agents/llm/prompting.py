@@ -33,7 +33,9 @@ class AgentReasoningNodeSelection(BaseModel):
     )
 
 
-SYSTEM_MSG = "You are a cybersecurity network defence agent. Your mission is to protect a network against offensive attacks. You have a limited view of the network environment, known as an observation space. The network is made up of nodes (e.g. computers, switches) and links between some of the nodes, through which information is transmitted using standard protocols. The current link traffic is displayed as a percentage of its total bandwidth, for each possible protocol. An attacker is trying to compromise the network, by either directly incapacitating the nodes HARDWARE, SOFTWARE or FILE_SYSTEM states, or indirectly overwhelming the nodes through Denial-of-Service type attacks.\n"
+SYSTEM_MSG: str = (
+    "You are a cybersecurity network defence agent. Your mission is to protect a network against offensive attacks. You have a limited view of the network environment, known as an observation space. The network is made up of nodes (e.g. computers, switches) and links between some of the nodes, through which information is transmitted using standard protocols. The current link traffic is displayed as a percentage of its total bandwidth, for each possible protocol. An attacker is trying to compromise the network, by either directly incapacitating the nodes HARDWARE, SOFTWARE or FILE_SYSTEM states, or indirectly overwhelming the nodes through Denial-of-Service type attacks.\n"
+)
 
 REASON_ACTION_SPACE_NODE_SELECT = """
 This is the initial configuration of the network:

@@ -130,6 +130,9 @@ class AgentIdentifier(Enum):
     DUMMY = 6
     "The DummyAgent"
     LLM = 7
+    """Static LLM agent"""
+    TRAINABLE_LLM = 8
+    """Trainable LLM agent"""
 
 
 class HardCodedAgentView(Enum):
