@@ -198,6 +198,7 @@ class LLM:
             action = NodeAction(env=env)
 
         action_id = action.action_id
+        print(action_id)
         return action_id, prompt, reasoning
 
 

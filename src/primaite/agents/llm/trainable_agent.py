@@ -4,12 +4,13 @@ from typing import Any, List, Literal, Tuple, TypeVar
 
 import numpy as np
 import torch
+import regex
 from pydantic import BaseModel
 from termcolor import colored
 from transformers import AutoTokenizer, BitsAndBytesConfig, GenerationConfig
 from peft.tuners.lora import LoraConfig
 from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
-
+from termcolor import colored
 from primaite import getLogger
 from primaite.action import NodeAction
 from primaite.agents.agent_abc import AgentSessionABC
@@ -46,6 +47,8 @@ def format_llama_prompt(system: str, messages: List[Tuple[Literal["user", "assis
         prompt += msg
 
     # prompt llm to answer
+    
+    prompt += "Please answer with an integer"
 
     return prompt
 
@@ -77,21 +80,24 @@ class TrainableLLM:
             tokenizer=self.tokenizer,
         )  # type: ignore
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: str) -> int:
         generation_kwargs = {
+            "min_length": 5,
             "do_sample": False,
             "pad_token_id": self.tokenizer.eos_token_id,
             "max_new_tokens": 256,
         }
 
         tokens = torch.tensor(self.tokenizer.encode(prompt)).to(DEVICE)
-        num_input_tokens = len(tokens)
 
         with torch.no_grad():
             gen_tokens = self.ppo_trainer.generate(tokens, **generation_kwargs)
 
-        response = self.tokenizer.decode(gen_tokens[0], skip_special_tokens=True)
-        return response
+        response = self.tokenizer.decode(gen_tokens[0])
+        print(response)
+        pattern = regex.findall(pattern=r"\d+", string=response)
+        
+        return int(pattern[0]) if pattern else 0
 
     def _build_reasoning_prompt(self, env_state: EnvironmentState, env_history: list[EnvironmentState]) -> str:
         prompt = ""
@@ -154,13 +160,18 @@ class TrainableLLM:
         prompt = format_llama_prompt(SYSTEM_MSG, messages)
 
         return prompt
+    
+    def learn(self, **kwargs):
+        total_timesteps = kwargs.pop("total_timesteps")
 
     def predict(self, env_state: EnvironmentState, env_history: list[EnvironmentState]) -> Tuple[int, str, str]:
         env = env_state.env
 
         # Think and decide which node to act on
         prompt = self._build_reasoning_prompt(env_state=env_state, env_history=env_history)
-        node_selection = self.generate(prompt=prompt)
+        action = self.generate(prompt=prompt)
+        
+        node_selection = get_node_from_action()
 
         # LLM chose to take an action on a node
         if node_selection != "NONE":
@@ -184,7 +195,7 @@ class TrainableLLM:
         else:
             action = NodeAction(env=env)
 
-        return action, prompt, ""
+        return action, prompt, "reason"
 
 
 class TrainableLLMAgent(AgentSessionABC):
@@ -206,16 +217,39 @@ class TrainableLLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = TrainableLLM(model_name="bigscience/bloomz-560m", timeout=120)
+        self._agent = TrainableLLM(model_name="bigscience/bloomz-1b1", timeout=120)
 
         # Keep track of env history
         self.env_history = [EnvironmentState(self._env)]
 
     def _save_checkpoint(self) -> None:
-        _LOGGER.warning("Deterministic agents cannot learn")
+        _LOGGER.warning(colored("Saving not implemented yet", color="light_red"))
 
-    def learn(self):
-        _LOGGER.warning("Deterministic agents cannot learn")
+    def learn(
+        self,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Train the agent.
+
+        :param kwargs: Any agent-specific key-word args to be passed.
+        """
+        time_steps = self._training_config.num_train_steps
+        episodes = self._training_config.num_train_episodes
+        self.is_eval = False
+        _LOGGER.info(f"Beginning learning for {episodes} episodes @" f" {time_steps} time steps...")
+        for i in range(episodes):
+            self._agent.learn(kwargs=kwargs)
+            self._save_checkpoint()
+        self._env._write_av_reward_per_episode()
+        self.save()
+        self._env.close()
+        super().learn()
+
+        # save agent
+        self.save()
+
+        self._plot_av_reward_per_episode(learning_session=True)
 
     def _calculate_action(self, obs: np.ndarray):
         action, prompt, reasoning = self._calculate_action_info(obs)
@@ -271,7 +305,7 @@ class TrainableLLMAgent(AgentSessionABC):
         pass
 
     def save(self):
-        return None
+        self._save_checkpoint()
 
     def export(self) -> None:
         return None
