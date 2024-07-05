@@ -132,3 +132,53 @@ Description: Patches the service for a number of steps, after which the status o
 
 # Action: {{'node_name':'NODE_NAME', 'node_property':'FILE_SYSTEM', 'property_action':'RESTORE'}}
 # Description: Restores the file system, setting it back to 'GOOD' after a number of steps. It can be applied even if the file system is 'DESTROYED', but it is more expensive to use than 'REPAIR'.
+
+
+ACTION_SELECTION = """
+This is the initial configuration of the network:
+{network_connectivity_desc}
+
+Initial
+{initial_obs_view_full}
+
+This is the history of offensive action observations and defensive actions you have taken at each step. If nothing happened at a specific step, it is omitted from the history:
+{obs_act_history}
+
+Here is an overview of the current observation space:
+{current_obs_view_full}
+Changes that have occured since last observation are:
+{current_obs_diff}
+
+
+As an agent, you are able to influence the state of this node by switching it on or off, resetting it, patching software or patching any of its services.
+
+Always take note of any action constraints outlined in the description provided.
+
+{action_info}
+
+Description: Patches the service for a number of steps, after which the status of the service returns to 'GOOD'.
+
+Please take a suitable action. The output should be ONLY an integer.
+
+Action: 
+"""
+
+ACTION_INFO = """## HARDWARE Actions:
+Action: {{'node_name':'NODE_NAME', 'node_property':'HARDWARE', 'property_action':'TURN_ON'}}
+Description: If it is currently off, will turn it on.
+
+Action: {{'node_name':'NODE_NAME', 'node_property':'HARDWARE', 'property_action':'TURN_OFF'}}
+Description: If it is currently on, will turn it off.
+
+Action: {{'node_name':'NODE_NAME', 'node_property':'HARDWARE', 'property_action':'RESET'}}
+Description: Resets the hardware after a number of steps. Only works if the node is turned on. Resets the status of the software, file system and services back to 'GOOD'.
+
+## SOFTWARE Actions:
+Action: {{'node_name':'NODE_NAME', 'node_property':'SOFTWARE', 'property_action':'PATCH'}}
+Description: Patches the software for a number of steps, after which the status of software returns to 'GOOD'.
+
+## SERVICE Actions:
+The following actions are only applicable if the node owns services. If choosing to take a SERVICE action, you must select the SERVICE by name from the following list: {service_names}. Be mindful that a node may own only a subset of these services. Assuming the selected service name is 'SERVICE_NAME', the following are service actions you can take: 
+
+Action: {{'node_name':'NODE_NAME', 'node_property':'SERVICE', 'property_action':'PATCH', 'service_name':'SERVICE_NAME'}}
+Description: Patches the service for a number of steps, after which the status of the service returns to 'GOOD'."""
