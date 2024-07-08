@@ -72,10 +72,7 @@ class TrainableLLM:
             bnb_4bit_quant_type="nf4",
         )
         self.model = AutoModelForCausalLMWithValueHead.from_pretrained(
-            model_name,
-            quantization_config=quantization_config,
-            peft_config=peft_config,
-            device_map = "auto"
+            model_name, quantization_config=quantization_config, peft_config=peft_config, device_map="auto"
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -203,11 +200,11 @@ class TrainableLLMAgent(AgentSessionABC):
 
                 obs, rewards, done, info = self._env.step(action=action)
 
-                stats = self._agent.ppo_trainer.step(
-                    queries=[torch.tensor(obs).flatten().to("cuda")],
-                    responses=[torch.tensor([action]).to("cuda")],
-                    scores=[torch.tensor([rewards]).to("cuda")],
-                )
+                # stats = self._agent.ppo_trainer.step(
+                #     queries=[torch.tensor(obs).flatten().to("cuda")],
+                #     responses=[torch.tensor([action]).to("cuda")],
+                #     scores=[torch.tensor([rewards]).to("cuda")],
+                # )
 
                 steps += 1
                 episode_reward += rewards
