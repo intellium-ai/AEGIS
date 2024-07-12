@@ -133,6 +133,8 @@ class AgentIdentifier(Enum):
     """Static LLM agent"""
     TRAINABLE_LLM = 8
     """Trainable LLM agent"""
+    GNN = 9
+    """Graph Attention Network agent"""
 
 
 class HardCodedAgentView(Enum):

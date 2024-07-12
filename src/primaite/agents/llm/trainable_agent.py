@@ -7,6 +7,7 @@ import numpy as np
 import torch
 import regex
 import wandb
+import networkx as nx
 from pydantic import BaseModel
 from termcolor import colored
 from transformers import AutoTokenizer, BitsAndBytesConfig, GenerationConfig
@@ -76,7 +77,8 @@ class TrainableLLM:
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.pad_token = "[PAD]"
+        self.tokenizer.padding_side = "left"
 
         self.ppo_trainer: PPOTrainer = PPOTrainer(
             config=ppo_config,
@@ -98,7 +100,7 @@ class TrainableLLM:
         with torch.no_grad():
             gen_tokens = self.ppo_trainer.generate(tokens, **generation_kwargs)
 
-        response = self.tokenizer.decode(gen_tokens[0][len(tokens) :])
+        response = self.tokenizer.decode(gen_tokens[0][:len(tokens)])
         return response
 
     def _build_action_prompt(
@@ -138,8 +140,8 @@ class TrainableLLM:
         prompt = self._build_action_prompt(env_state=env_state, env_history=env_history)
 
         response = self.generate(prompt=prompt)
-        print(response)
         digits = regex.findall(r"\d+", response)
+        
         action = int(digits[-1]) if digits else 0
         return action, prompt, "reason"
 
@@ -163,7 +165,10 @@ class TrainableLLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = TrainableLLM(model_name="mistralai/Mistral-7B-v0.1", timeout=120)
+        self._agent = TrainableLLM(model_name="bigscience/bloomz-560m", timeout=120)
+        
+        adj = nx.adjacency_matrix(self._env.network).todense()
+        print(adj)
 
         # Keep track of env history
         self.env_history = [EnvironmentState(self._env)]
@@ -194,17 +199,26 @@ class TrainableLLMAgent(AgentSessionABC):
             reward_list = []
             while steps < time_steps and not done:
 
-                action = self._calculate_action(obs)
+                action, prompt = self._calculate_action(obs)
 
                 assert isinstance(action, int)
 
                 obs, rewards, done, info = self._env.step(action=action)
 
-                # stats = self._agent.ppo_trainer.step(
-                #     queries=[torch.tensor(obs).flatten().to("cuda")],
-                #     responses=[torch.tensor([action]).to("cuda")],
-                #     scores=[torch.tensor([rewards]).to("cuda")],
-                # )
+                obs = torch.tensor(obs).flatten(0)  # Flatten all dimensions except the last
+
+                # Ensure action is 2D
+                action = torch.tensor(action, device='cuda:0').view(1, -1)
+
+                # Ensure rewards is 2D
+                rewards = torch.tensor(rewards, device='cuda:0').view(1, -1)
+
+                # Now call the step function
+                stats = self._agent.ppo_trainer.step(
+                    [obs.to('cuda:0')],
+                    action,
+                    rewards
+                )
 
                 steps += 1
                 episode_reward += rewards
@@ -223,7 +237,7 @@ class TrainableLLMAgent(AgentSessionABC):
     def _calculate_action(self, obs: np.ndarray):
         action, prompt, reasoning = self._calculate_action_info(obs)
 
-        return action
+        return action, prompt
 
     def _calculate_action_info(self, obs: np.ndarray) -> tuple[int, str | None, str | None]:
         prev_env_state = self.env_history[-1]
@@ -233,7 +247,7 @@ class TrainableLLMAgent(AgentSessionABC):
         env_state.action_id = action
         self.env_history.append(env_state)
 
-        return action, None, None
+        return action, prompt, None
 
     def evaluate(
         self,
@@ -256,7 +270,7 @@ class TrainableLLMAgent(AgentSessionABC):
             done, steps, rew = False, 0, 0
             while steps < time_steps and not done:
 
-                action = self._calculate_action(obs)
+                action, _ = self._calculate_action(obs)
 
                 assert isinstance(action, int)
 
