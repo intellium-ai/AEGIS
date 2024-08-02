@@ -29,15 +29,16 @@ class GraphEmbedding(nn.Module):
 
 
 class TextEncoder(nn.Module):
-    def __init__(self, model_name: str = "bert-base-uncased"):
+    def __init__(self, model_name: str = "bert-base-uncased", device: str = 'cpu'):
         super().__init__()
+        self.device = device
         self.tokenizer = BertTokenizer.from_pretrained(model_name)
-        self.model = BertModel.from_pretrained(model_name)
+        self.model = BertModel.from_pretrained(model_name).to(device)
 
-    def forward(self, graph, device):
+    def forward(self, graph):
         prompt = f"Node features:\n{graph.x}\n\nEdge Index: {graph.edge_index}"
         input_ids = self.tokenizer.encode(prompt)
-        outputs = self.model(torch.tensor(input_ids).unsqueeze(0).to(device))  # type: ignore
+        outputs = self.model(torch.tensor(input_ids).unsqueeze(0).to(self.device))  # type: ignore
         return outputs.last_hidden_state[:, 0, :]
 
 
@@ -53,33 +54,37 @@ class AlignmentProjector(nn.Module):
         x = self.linear2(x)
         return F.relu(x)
 
-class LLM:
-    def __init__(self, model='HuggingFaceTB/SmolLM-1.7B-Instruct', device='cuda:1'):
+class LLM(nn.Module):
+    def __init__(self, model_name='HuggingFaceTB/SmolLM-1.7B-Instruct', device: str = 'cpu'):
+        super().__init__()
         self.device = device
-        self.model = AutoModelForCausalLM.from_pretrained(model, torch_dtype=torch.float16).to(self.device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model, torch_dtype=torch.float16, padding=True)
-        
-    def generate(self, prompt) -> str:
-        """Your standard .generate"""
-        
-        ## Prepare prompt with template
-        inputs = self._tokenize(prompt)
-        output = self.model.generate(**inputs, max_new_tokens=69)
-        return self.tokenizer.decode(output[0])
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16).to(device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, torch_dtype=torch.float16, padding=True)
     
-    def _tokenize(self, prompt) -> List[int]:
+    def _tokenize(self, prompt, use_template: bool = False) -> List[int]:
         ## Prepare prompt with template
-        messages = [{"role": "user", "content": prompt}]
-        inputs=self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt").to(self.device)
+        if use_template:
+            messages = [{"role": "user", "content": prompt}]
+            inputs=self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt").to(self.device)
+        else:
+            inputs = self.tokenizer.encode(prompt, return_tensors='pt').to(self.device)
         return inputs
         
-    def get_text_embeddings(self, prompt) -> torch.Tensor:
+    def get_input_embeddings(self, prompt) -> torch.Tensor:
         """Your non-standard .generate"""
-        inputs = self._tokenize(prompt)
-        return self.model.get_input_embeddings()(inputs)
+        inputs = self._tokenize(prompt=prompt, use_template=False).to(self.device)
+        with torch.no_grad():
+            embs = self.model.get_input_embeddings()(inputs)
+            
+        return embs
     
-    def generate_from_embeddings(self, embeddings) -> str:
+    def generate_from_embeddings(self, text_embeddings) -> str:
+        # Do some concatenation here
+        ...
         
+        logits = self.model.forward(inputs_embeds=text_embeddings).logits
+        tokens = torch.argmax(logits, dim=-1)
+        return self.tokenizer.decode(tokens[0])        
         
         
 def train(train_data, gnn, te, criterion, opt, device):

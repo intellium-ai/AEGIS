@@ -135,6 +135,8 @@ class AgentIdentifier(Enum):
     """Trainable LLM agent"""
     GNN = 9
     """Graph Attention Network agent"""
+    GIT = 10
+    """Graph Instruction Tuning agent"""
 
 
 class HardCodedAgentView(Enum):

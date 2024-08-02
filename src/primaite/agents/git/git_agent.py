@@ -9,18 +9,17 @@ from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
-from primaite.agents.gnn.gnn_policy import GNNPolicy
+from primaite.agents.git.git_policy import GITPolicy
 
 _LOGGER: Logger = getLogger(__name__)
 
-device = "cpu"
+device = "cuda:0"
 
-
-class GNNAgent(AgentSessionABC):
+class GITAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
-        assert self._training_config.agent_identifier == AgentIdentifier.GNN
+        assert self._training_config.agent_identifier == AgentIdentifier.GIT
         self._setup()
 
     def _setup(self):
@@ -35,8 +34,8 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GNNPolicy(6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
-
+        self._agent = GITPolicy(6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
+        
         print(self._agent)
 
         # Keep track of env history
@@ -52,13 +51,12 @@ class GNNAgent(AgentSessionABC):
     def create_graph(self, obs):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
-        state.x = torch.tensor(obs[:10, 1:], dtype=torch.float32).to(device)
-        import pickle as pkl
-        print(pkl.dumps(state))
+        state.x = torch.tensor(obs[:9, 1:], dtype=torch.float32).to(device)
         return state
 
     def _calculate_action(self, obs) -> int:
         data = self.create_graph(obs)
+        print('GRAPH SHAPES: ', data.x.shape, data.edge_index.shape)
         a_prob = self._agent(data.x, data.edge_index)
         a_distrib = Categorical(torch.exp(a_prob))
         action = a_distrib.sample().item()
