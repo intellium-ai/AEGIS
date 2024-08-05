@@ -14,6 +14,7 @@ from primaite.agents.hardcoded_node import HardCodedNodeAgent
 from primaite.agents.llm.trainable_agent import TrainableLLMAgent
 from primaite.agents.rllib import RLlibAgent
 from primaite.agents.llm import LLMAgent
+from primaite.agents.git.git_agent import GITAgent
 from primaite.agents.sb3 import SB3Agent
 from primaite.agents.simple import DoNothingACLAgent, DoNothingNodeAgent, DummyAgent, RandomAgent
 from primaite.common.enums import ActionType, AgentFramework, AgentIdentifier, SessionType
@@ -97,6 +98,8 @@ class PrimaiteSession:
                 self._agent_session = TrainableLLMAgent(self._training_config_path, self._lay_down_config_path)
             elif self._training_config.agent_identifier == AgentIdentifier.GNN:
                 self._agent_session = GNNAgent(self._training_config_path, self._lay_down_config_path)
+            elif self._training_config.agent_identifier == AgentIdentifier.GIT:
+                self._agent_session = GITAgent(self._training_config_path, self._lay_down_config_path)
             elif self._training_config.agent_identifier == AgentIdentifier.HARDCODED:
                 _LOGGER.debug(f"PrimaiteSession Setup: Agent Identifier =" f" {AgentIdentifier.HARDCODED}")
                 if self._training_config.action_type == ActionType.NODE:

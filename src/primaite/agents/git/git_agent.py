@@ -1,6 +1,6 @@
 from logging import Logger
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple
 import torch
 from torch.distributions import Categorical
 from primaite import getLogger
@@ -10,6 +10,7 @@ from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.git.git_policy import GITPolicy
+from primaite.action import NodeAction
 
 _LOGGER: Logger = getLogger(__name__)
 
@@ -23,7 +24,7 @@ class GITAgent(AgentSessionABC):
         self._setup()
 
     def _setup(self):
-
+        # you need to find out how to get the probability of each token INTEGER that was produced within the action range, convert this to a tensor and then apply the loss.backward() on this, preceeding a optimizer.backward() pass to update the model weights. Discuss with stefan - will this work?
         if not isinstance(self.session_path, Path):
             self.session_path = Path(self.session_path)
 
@@ -34,7 +35,7 @@ class GITAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GITPolicy(6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
+        self._agent = GITPolicy(state_space=6, action_space=100, hidden_dim=128, ge_learning_rate=0.0001, device=device)
         
         print(self._agent)
 
@@ -56,11 +57,8 @@ class GITAgent(AgentSessionABC):
 
     def _calculate_action(self, obs) -> int:
         data = self.create_graph(obs)
-        print('GRAPH SHAPES: ', data.x.shape, data.edge_index.shape)
-        a_prob = self._agent(data.x, data.edge_index)
-        a_distrib = Categorical(torch.exp(a_prob))
-        action = a_distrib.sample().item()
-        return int(action)
+        result = self._agent(data.x, data.edge_index)
+        return result
 
     def evaluate(
         self,
@@ -83,7 +81,8 @@ class GITAgent(AgentSessionABC):
 
             while steps < time_steps and not done:
 
-                action = self._calculate_action(obs)
+                result = self._calculate_action(obs)
+                action = int(result.indices[0])
                 obs, rewards, done, _ = self._env.step(action=action)
                 steps += 1
                 rew += rewards
@@ -96,26 +95,34 @@ class GITAgent(AgentSessionABC):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
-
+        
         for ep in range(episodes):
             obs = self._env.reset()
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
+
                 data = self.create_graph(obs)
-                a_prob = self._agent(data.x, data.edge_index)
-                a_distrib = Categorical(torch.exp(a_prob))
-                action = a_distrib.sample().item()
-
-                obs, rewards, done, _ = self._env.step(action=int(action))
-
-                self._agent.put_data((rewards, a_prob[0][action]))
+                output = self._agent(data.x, data.edge_index)
+                action = output.indices[0]
+                try:
+                    action = int(action)
+                    NodeAction.from_id(env=self._env, action_id=action)
+                except:
+                    action = 0
+                    print('a non integer or invalid integer action id was produced, falling back to 0')
+                    
+                obs, rewards, done, _ = self._env.step(action=action)
+                self._agent.put_data((rewards, output.values[0]))
 
                 steps += 1
                 rew += rewards
                 self._save_checkpoint()
+                readable_action = NodeAction.from_id(env=self._env, action_id=action)
+                
 
-            self._agent.train_net(0.99)
+            loss = self._agent.train_net(0.99)
+            print(f'Completed episode: {ep} with loss {loss}')
             self._env._write_av_reward_per_episode()
             self.save()
 

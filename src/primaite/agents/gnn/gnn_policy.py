@@ -55,7 +55,6 @@ class GNNPolicy(nn.Module):
         R = 0
         G = []
         G_t = 0
-
         # Whitening baseline
         for r, prob in self.roll_out[::-1]:
             G_t = r + gamma * G_t
@@ -71,6 +70,5 @@ class GNNPolicy(nn.Module):
             R = r + gamma * R
             loss = -prob * ((R - G_mean) / G_std)
             loss.backward()
-
         self.optimizer.step()
         self.roll_out = []

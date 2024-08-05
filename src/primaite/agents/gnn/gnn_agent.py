@@ -20,6 +20,7 @@ class GNNAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
+        print(self._training_config.agent_identifier)
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
         self._setup()
 
@@ -35,7 +36,7 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GNNPolicy(6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
+        self._agent = GNNPolicy(state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
 
         print(self._agent)
 
@@ -52,9 +53,7 @@ class GNNAgent(AgentSessionABC):
     def create_graph(self, obs):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
-        state.x = torch.tensor(obs[:10, 1:], dtype=torch.float32).to(device)
-        import pickle as pkl
-        print(pkl.dumps(state))
+        state.x = torch.tensor(obs[:9, 1:], dtype=torch.float32).to(device)
         return state
 
     def _calculate_action(self, obs) -> int:
@@ -106,11 +105,12 @@ class GNNAgent(AgentSessionABC):
             while steps < time_steps and not done:
                 data = self.create_graph(obs)
                 a_prob = self._agent(data.x, data.edge_index)
+                
                 a_distrib = Categorical(torch.exp(a_prob))
                 action = a_distrib.sample().item()
 
                 obs, rewards, done, _ = self._env.step(action=int(action))
-
+                print(rewards, a_prob[0][action])
                 self._agent.put_data((rewards, a_prob[0][action]))
 
                 steps += 1
