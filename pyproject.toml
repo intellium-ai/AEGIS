@@ -46,8 +46,9 @@ dependencies = [
     "trl==0.9.6",
     "torch==2.4.0",
     "altair==5.3.0",
-    "transformers==4.42.4"
-    "wandb==0.17.5"
+    "transformers==4.42.4",
+    "wandb==0.17.5",
+    "bitsandbytes",
 ]
 
 [tool.setuptools.dynamic]

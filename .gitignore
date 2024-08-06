@@ -153,3 +153,4 @@ src/primaite/outputs/
 benchmark/output
 
 .vscode
+src/primaite/agents/git/aegis

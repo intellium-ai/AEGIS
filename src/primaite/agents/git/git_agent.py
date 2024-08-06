@@ -11,7 +11,8 @@ from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.git.git_policy import GITPolicy
 from primaite.action import NodeAction
-
+import matplotlib.pyplot as plt
+import logging
 _LOGGER: Logger = getLogger(__name__)
 
 device = "cuda:0"
@@ -35,9 +36,9 @@ class GITAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GITPolicy(state_space=6, action_space=100, hidden_dim=128, ge_learning_rate=0.0001, device=device)
+        self._agent = GITPolicy(state_space=6, action_space=100, hidden_dim=128, ge_learning_rate=0.0001, llm_device='cuda:0', ap_device='cuda:1', ge_device='cuda:0')
         
-        print(self._agent)
+        logging.info(self._agent)
 
         # Keep track of env history
         self.env_history = [EnvironmentState(self._env)]
@@ -95,7 +96,8 @@ class GITAgent(AgentSessionABC):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
-        
+        losses = []
+        mean_rewards = []
         for ep in range(episodes):
             obs = self._env.reset()
             done, steps, rew = False, 0, 0
@@ -104,33 +106,51 @@ class GITAgent(AgentSessionABC):
 
                 data = self.create_graph(obs)
                 output = self._agent(data.x, data.edge_index)
-                action = output.indices[0]
+                
+                # The action output ID is a token ID, so we need to convert it to an integer:
+                action = self._agent.llm.tokenizer.decode(output.indices[0])
+                
                 try:
+                    # Validate that the action ID is a valid action integer. If not, fallback to 0.
                     action = int(action)
                     NodeAction.from_id(env=self._env, action_id=action)
                 except:
                     action = 0
-                    print('a non integer or invalid integer action id was produced, falling back to 0')
-                    
+                    logging.warning('An invalid action id was produced, falling back to 0')
+                
                 obs, rewards, done, _ = self._env.step(action=action)
                 self._agent.put_data((rewards, output.values[0]))
 
                 steps += 1
                 rew += rewards
                 self._save_checkpoint()
-                readable_action = NodeAction.from_id(env=self._env, action_id=action)
                 
 
-            loss = self._agent.train_net(0.99)
-            print(f'Completed episode: {ep} with loss {loss}')
+            loss, mean_reward = self._agent.train_net(0.99)
+            losses.append(loss)
+            mean_rewards.append(mean_reward)
+            self._save_training_fig(losses=losses, mean_rewards=mean_rewards)
+            logging.info(f'Completed episode: {ep} with loss {loss}')
             self._env._write_av_reward_per_episode()
             self.save()
 
         self._env.close()
         super().learn()
-
+        
         self._plot_av_reward_per_episode(True)
-
+    def _save_training_fig(self, losses, mean_rewards):
+        plt.plot(losses, label='Loss')
+        #plt.plot(mean_reward, label='Avg Reward')
+        plt.xlabel('Episode #')
+        plt.ylabel('Loss')
+        plt.savefig('./loss.png')
+        
+        plt.close()
+        plt.plot(mean_rewards, label='Avg Reward')
+        plt.xlabel('Episode #')
+        plt.ylabel('Avg Reward')
+        plt.savefig('./avg_reward.png')
+        plt.close()
     def _get_latest_checkpoint(self):
         pass
 
