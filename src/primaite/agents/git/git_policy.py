@@ -28,7 +28,7 @@ The actions you could take are laid out below:
 4: PATCH_HARDWARE - Patch a nodes hardware
 5: PATCH_SERVICE - Patch a nodes service
 
-For action 5, you must always specify the service ID to patch for example 2.
+For action 5, you must always specify the service ID to patch.
 
 You must always state which node number this action is to be applied to. If the action is a service patch, always specify which service id to patch.
 
@@ -42,7 +42,9 @@ Action: 'PATCH SERVICE UDP 5'
 
 Action: 1.1 - Turns on CLIENT_1
 Action: 2.3 - Resets CLIENT_2
-Action: 5.5.1 - Patches the TCP service for"""
+Action: 5.5.1 - Patches the TCP service for MANAGEMENT_CONSOLE
+Action: 4.4 - Patches the hardware for SECURITY_SUITE
+Action: NONE - No action
 
 Your actions should always use this same format. If no action is required, just say 'NONE'.
 
