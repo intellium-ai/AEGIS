@@ -44,6 +44,10 @@ class Link(object):
         """
         self.protocol_list.append(Protocol(_protocol))
 
+    def get_traffic_level(self) -> float:
+        """Get a trafic level for the link from 0 to 1"""
+        return self.get_current_load() / self.get_bandwidth()
+
     def get_id(self) -> str:
         """
         Gets link ID.

@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from primaite.agents.env_state import _verbose_node_action, EnvironmentState
+from primaite.action import NodeAction
+from primaite.environment.env_state import EnvironmentState
+from primaite.common.enums import NodePropertyAction
+from primaite.primaite_session import AgentIdentifier
 
 
 def display_env_state(env_state: EnvironmentState):
@@ -25,16 +28,28 @@ def display_env_state(env_state: EnvironmentState):
             fig = env_state.display_network()
             st.pyplot(fig)
     with col_agent:
-        if env_state.action is not None:
-            st.write("**:blue[Blue Agent:]**")
-            action_verbose = _verbose_node_action(env_state.action, env_state.env)
-            st.markdown(action_verbose)
-
-            if env_state.info is not None:
-                with st.expander("Info"):
-                    st.write(env_state.info)
-            st.divider()
-
         st.write("**Observation Space Changes:**")
         for change in env_state.obs_diff(colors=True):
             st.markdown(change)
+
+        if env_state.action_id is not None:
+            st.write("**:blue[Blue Agent:]**")
+            try:
+                action = NodeAction.from_id(env=env_state.env, action_id=env_state.action_id)
+            except Exception:
+                pass
+                action = None
+            if action:
+                if (
+                    action.node_property != NodePropertyAction.NONE
+                    and env_state.env.agent_identifier == AgentIdentifier.LLM
+                ):
+                    st.markdown(f"**:blue[Reasoning:]** {str(env_state.reasoning)}")
+
+                action_verbose = action.verbose(colored=True)
+                st.markdown(action_verbose)
+
+                if env_state.prompt is not None:
+                    with st.expander("Info"):
+                        st.markdown(f"{env_state.prompt}")
+            st.divider()

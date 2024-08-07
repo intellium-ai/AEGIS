@@ -1,14 +1,14 @@
 # © Crown-owned copyright 2023, Defence Science and Technology Laboratory UK
 import numpy as np
 
+from primaite import getLogger
 from primaite.agents.hardcoded_abc import HardCodedAgentSessionABC
 from primaite.agents.utils import (
-    get_new_action,
-    transform_action_node_enum,
     _transform_change_nodelink_readable,
     convert_to_old_obs,
+    get_new_action,
+    transform_action_node_enum,
 )
-from primaite import getLogger
 
 _LOGGER = getLogger(__name__)
 
@@ -39,7 +39,7 @@ class HardCodedNodeAgent(HardCodedAgentSessionABC):
             if os_state == "COMPROMISED":
                 action_node_id = x + 1
                 action_node_property = "OS"
-                property_action = "PATCHING"
+                property_action = "PATCH"
                 action_service_index = 0  # does nothing isn't relevant for os
                 action = [
                     action_node_id,
@@ -60,7 +60,7 @@ class HardCodedNodeAgent(HardCodedAgentSessionABC):
                 if service_state == "COMPROMISED":
                     action_node_id = x + 1
                     action_node_property = "SERVICE"
-                    property_action = "PATCHING"
+                    property_action = "PATCH"
                     action_service_index = service_num
 
                     action = [
@@ -83,7 +83,7 @@ class HardCodedNodeAgent(HardCodedAgentSessionABC):
                 if service_state == "OVERWHELMED":
                     action_node_id = x + 1
                     action_node_property = "SERVICE"
-                    property_action = "PATCHING"
+                    property_action = "PATCH"
                     action_service_index = service_num
 
                     action = [
@@ -99,10 +99,10 @@ class HardCodedNodeAgent(HardCodedAgentSessionABC):
 
         # Finally, turn on any off nodes
         for x, operating_state in enumerate(o):
-            if os_state == "OFF":
+            if operating_state == "OFF":
                 action_node_id = x + 1
                 action_node_property = "OPERATING"
-                property_action = "ON"  # Why reset it when we can just turn it on
+                property_action = "TURN_ON"  # Why reset it when we can just turn it on
                 action_service_index = 0  # does nothing isn't relevant for operating state
                 action = [
                     action_node_id,
@@ -119,7 +119,7 @@ class HardCodedNodeAgent(HardCodedAgentSessionABC):
         # If no good actions, just go with an action that wont do any harm
         action_node_id = 1
         action_node_property = "NONE"
-        property_action = "ON"
+        property_action = "TURN_ON"
         action_service_index = 0
         action = [
             action_node_id,

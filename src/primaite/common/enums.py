@@ -168,12 +168,22 @@ class FileSystemState(Enum):
     RESTORING = 5
 
 
+class NodePropertyAction(Enum):
+    """Node property action types."""
+
+    NONE = 0
+    HARDWARE = 1
+    SOFTWARE = 2
+    SERVICE = 3
+    FILE_SYSTEM = 4
+
+
 class NodeHardwareAction(Enum):
     """Node hardware action."""
 
     NONE = 0
-    ON = 1
-    OFF = 2
+    TURN_ON = 1
+    TURN_OFF = 2
     RESET = 3
 
 
@@ -181,7 +191,16 @@ class NodeSoftwareAction(Enum):
     """Node software action."""
 
     NONE = 0
-    PATCHING = 1
+    PATCH = 1
+
+
+class NodeFileSystemAction(Enum):
+    """Node file system action."""
+
+    NONE = 0
+    SCAN = 1
+    REPAIR = 2
+    RESTORE = 3
 
 
 class LinkStatus(Enum):

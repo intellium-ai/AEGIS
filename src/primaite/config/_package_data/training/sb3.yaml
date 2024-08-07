@@ -64,6 +64,8 @@ observation_space:
     #     combine_service_traffic : True
     # - name: ACCESS_CONTROL_LIST
 
+load_agent: True
+
 # Number of episodes for training to run per session
 num_train_episodes: 512
 

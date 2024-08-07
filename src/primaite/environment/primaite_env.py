@@ -270,6 +270,12 @@ class Primaite(Env):
         self.is_eval = False
 
     @property
+    def active_nodes(self) -> list[ActiveNode]:
+        nodes = list(self.nodes.values())
+        nodes = [n for n in nodes if isinstance(n, ActiveNode)]
+        return nodes
+
+    @property
     def actual_episode_count(self) -> int:
         """Shifts the episode_count by -1 for RLlib learning session."""
         if self.training_config.agent_framework is AgentFramework.RLLIB and not self.is_eval:
@@ -1190,11 +1196,11 @@ class Primaite(Env):
         # [0, 3] - action on property (0 = nothing, On / Scan, Off / Repair, Reset / Patch / Restore) # noqa
         # [0, num services] - resolves to service ID (0 = nothing, resolves to service) # noqa
         # reserve 0 action to be a nothing action
-        actions = {0: [1, 0, 0, 0]}
+        actions = {0: [0, 0, 0, 0]}
         action_key = 1
         for node in range(1, self.num_nodes + 1):
-            # 4 node properties (NONE, OPERATING, OS, SERVICE)
-            for node_property in range(4):
+            # 4 node properties (NONE, OPERATING, OS, SERVICE, FILE_SYSTEM)
+            for node_property in range(5):
                 # Node Actions either:
                 # (NONE, ON, OFF, RESET) - operating state OR (NONE, PATCH) - OS/service state
                 # Use MAX to ensure we get them all

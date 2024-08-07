@@ -122,6 +122,7 @@ class SB3Agent(AgentSessionABC):
                 self._env.total_step_count = md_dict["learning"]["total_time_steps"]
 
             # load the file
+            _LOGGER.info(f"Loading agent from {load_file}")
             self._agent = self._agent_class.load(load_file, env=self._env)
 
             # set agent values

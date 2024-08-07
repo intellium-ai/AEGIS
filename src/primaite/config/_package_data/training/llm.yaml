@@ -74,7 +74,7 @@ num_train_steps: 256
 num_eval_episodes: 1
 
 # Number of time_steps for evaluation per episode
-num_eval_steps: 128
+num_eval_steps: 256
 
 # Sets how often the agent will save a checkpoint (every n time episodes).
 # Set to 0 if no checkpoints are required. Default is 10
