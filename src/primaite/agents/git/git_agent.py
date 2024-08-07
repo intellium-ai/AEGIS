@@ -105,10 +105,11 @@ class GITAgent(AgentSessionABC):
             while steps < time_steps and not done:
 
                 data = self.create_graph(obs)
-                output = self._agent(data.x, data.edge_index)
+                token_ids, probs = self._agent(data.x, data.edge_index)
+                # FIND THE ACTON OUTPUT IN TOKEN_IDS
                 
                 # The action output ID is a token ID, so we need to convert it to an integer:
-                action = self._agent.llm.tokenizer.decode(output.indices[0])
+                action = 1#self._agent.llm.tokenizer.decode(token_ids.indices[0])
                 
                 try:
                     # Validate that the action ID is a valid action integer. If not, fallback to 0.
@@ -119,7 +120,7 @@ class GITAgent(AgentSessionABC):
                     logging.warning('An invalid action id was produced, falling back to 0')
                 
                 obs, rewards, done, _ = self._env.step(action=action)
-                self._agent.put_data((rewards, output.values[0]))
+                self._agent.put_data((rewards, probs))
 
                 steps += 1
                 rew += rewards
