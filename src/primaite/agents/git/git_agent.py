@@ -11,6 +11,9 @@ from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.git.git_policy import GITPolicy
 from primaite.action import NodeAction
+from primaite.agents.git.prompts import LLM_PROMPT
+from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
+from primaite.environment import EnvironmentState
 import matplotlib.pyplot as plt
 import logging
 _LOGGER: Logger = getLogger(__name__)
@@ -58,9 +61,46 @@ class GITAgent(AgentSessionABC):
 
     def _calculate_action(self, obs) -> int:
         data = self.create_graph(obs)
-        result = self._agent(data.x, data.edge_index)
+        prompt = self._build_prompt()
+        result = self._agent(data.x, data.edge_index, prompt)
         return result
 
+    def _build_prompt(self) -> str:
+        node_str = "\n".join(f"{key}: {value}" for key, value in self._env.nodes.items()) # ID: NODE_NAME
+
+        
+        # For each unique service, assign an ID for it in the format ID: SERVICE
+        node_services_index = self._env.services_list
+        services_str = '\n'.join(f'{i+1}: {service}' for i, service in enumerate(node_services_index))
+
+        # Make the service name just TCP or UDP etc, then find the mapping between nodes and what service they have.
+        nodes_table = self.env_history[0].nodes_table.rename(columns={'TCP Service State': 'TCP', 'TCP_SQL Service State': 'TCP_SQL', 'UDP Service State': 'UDP'})
+        node_services = {}
+        for idx in range(len(nodes_table)):
+            node = nodes_table.iloc[idx, :]
+            node_services[node['Name']] = []
+            
+            if node['TCP'] != '-':
+                node_services[node['Name']].append(node_services_index.index('TCP') + 1)
+            if node['TCP_SQL'] != '-':
+                node_services[node['Name']].append(node_services_index.index('TCP_SQL') + 1)
+            if node['UDP'] != '-':
+                node_services[node['Name']].append(node_services_index.index('UDP') + 1)
+        
+        # Combine node services into one string (Node name: service IDs)
+        node_services_str = "\n".join(f"{key}: {', '.join(str(val) for val in value) if value else 'NONE'}" for key, value in node_services.items())
+        
+        # Get observation/action history string and new enironment observations string
+        obs_act_history_str = get_obs_act_history_str(self.env_history, env=self._env)
+        if not obs_act_history_str:
+            obs_act_history_str = 'No observation history yet...'
+        obs_diff_str = obs_diff(EnvironmentState(env=self._env))
+        
+        # Format the prompt for this step
+        prompt = LLM_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str)
+
+        return prompt
+        
     def evaluate(
         self,
         **kwargs: Any,
@@ -105,8 +145,11 @@ class GITAgent(AgentSessionABC):
             while steps < time_steps and not done:
 
                 data = self.create_graph(obs)
-                token_ids, probs = self._agent(data.x, data.edge_index)
+                prompt = self._build_prompt()
+                token_ids, probs = self._agent(data.x, data.edge_index, prompt)
+                
                 # FIND THE ACTON OUTPUT IN TOKEN_IDS
+                print(self._agent.llm.tokenizer.decode(token_ids, skip_special_tokens=True))
                 
                 # The action output ID is a token ID, so we need to convert it to an integer:
                 action = 1#self._agent.llm.tokenizer.decode(token_ids.indices[0])

@@ -10,52 +10,6 @@ from transformers.models.llama.modeling_llama import LlamaForCausalLM
 from typing import List, Tuple, Any
 import logging
 import numpy as np
-LLM_PROMPT = """Your job is to defend the network against attacks. Given the provided network graph tokens, please choose one action to execute within the environment. Baring in mind that you will be rewarded for taking the most suitible action in a timely manner and with consideration for what nodes might take the highest priority.
-
-The nodes and their respective node IDin the network are:
-{node_ids}
-
-The services and their respective service ID in the network are:
-{services}
-
-Nodes and the services (Service ID) they have running are shown below:
-{node_services}
-
-The actions you could take are laid out below:
-1: TURN_ON - Turn on a node
-2: TURN_OFF - Turn off a node
-3: RESET - Reset a node
-4: PATCH_HARDWARE - Patch a nodes hardware
-5: PATCH_SERVICE - Patch a nodes service
-
-For action 5, you must always specify the service ID to patch.
-
-You must always state which node number this action is to be applied to. If the action is a service patch, always specify which service id to patch.
-
-Here are some examples of actions in the format NODE_ID ACTION_ID
-Action: 'RESET 1'
-Action: 'PATCH_HARDWARE 2'
-Action: 'NONE'
-Action: 'PATCH SERVICE TCP 7'
-Action: 'TURN_OFF 3'
-Action: 'PATCH SERVICE UDP 5'
-
-Action: 1.1 - Turns on CLIENT_1
-Action: 2.3 - Resets CLIENT_2
-Action: 5.5.1 - Patches the TCP service for MANAGEMENT_CONSOLE
-Action: 4.4 - Patches the hardware for SECURITY_SUITE
-Action: NONE - No action
-
-Your actions should always use this same format. If no action is required, just say 'NONE'.
-
-You need to be aware of recent changes in the networks state, here is a breakdown of what has been happening:
-{obs_act_history}
-
-Now, the following changes have occurred:
-{current_obs_diff}
-
-Specify an action to take as shown above. Your turn!"""
-
 
 class GraphEmbedding(nn.Module):
     def __init__(self, in_channels, output_dim, hidden_dim, device: str = 'cuda:1'):
@@ -123,7 +77,6 @@ class LLM(torch.nn.Module):
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-            print(messages)
             inputs = self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
         else:
             inputs = token_ids
@@ -193,10 +146,9 @@ class GITPolicy(nn.Module):
     def put_data(self, data):
         self.roll_out.append(data)
         
-    def forward(self, x, edge_index):
+    def forward(self, x, edge_index, prompt):
         """This should return the action integer"""
-        prompt = LLM_PROMPT
-        llm_embs= self.llm.get_embeddings(prompt=prompt)
+        llm_embs= self.llm.get_embeddings(prompt=prompt) # If we append the graph tokens to this, we are gonna be adding them to the end of the chat template (<end turn> or whatever). I don't like that.
         graph_output = self.ge(x, edge_index)
         
         # Match graph embs output with LLM embs dimensionality and dtype
@@ -206,7 +158,7 @@ class GITPolicy(nn.Module):
         graph_embs = self.ap(graph_embs).to(torch.float16)
         concatenated_embs = torch.cat([graph_embs.to(self.llm_device), llm_embs.to(self.llm_device)], 1)
 
-        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=2)
+        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=10)
         
         return token_ids, probs#, graph_output
 
