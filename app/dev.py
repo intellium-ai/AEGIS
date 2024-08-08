@@ -1,8 +1,10 @@
-import streamlit as st
 from pathlib import Path
-from primaite.primaite_session import PrimaiteSession, AgentIdentifier
+
+import streamlit as st
 from environment import display_env_state, EnvironmentState
 from streamlit import session_state as state
+
+from primaite.primaite_session import AgentIdentifier, PrimaiteSession
 
 st.set_page_config(layout="wide", page_title="Home")
 
@@ -12,8 +14,8 @@ training_config_root = config_path / "training"
 session_config_root = Path("trained_agents")
 
 # initialise session state for navigation if it doesn't exist
-if 'page' not in st.session_state:
-    st.session_state.page = 'home'
+if "page" not in st.session_state:
+    st.session_state.page = "home"
 
 if "agent" not in state:
     state.agent = None
@@ -41,6 +43,7 @@ if "session_file" not in state:
 
 if "network_fig" not in state:
     state.network_fig = None
+
 
 def init_primaite():
 
@@ -70,6 +73,7 @@ def init_primaite():
 
     state.network_fig = state.env_history[state.curr_step].display_network()
 
+
 def home_page():
     col1, col2 = st.columns(2, gap="large", vertical_alignment="center")
 
@@ -81,47 +85,51 @@ def home_page():
         }
         </style>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
     with col1:
-        st.title('AEGIS - The Autonomous Embedded-Graph Intrusion Sentinel')
-        st.write('Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.')
+        st.title("AEGIS - The Autonomous Embedded-Graph Intrusion Sentinel")
+        st.write(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
+        )
 
         st.markdown('<div class="spacer"></div>', unsafe_allow_html=True)
 
         # Create a horizontal container for the buttons
         button_container = st.container()
-        
+
         # Add buttons in separate columns within the container
         button_col1, button_col2, _ = button_container.columns([1, 1, 1])
-            
-        with button_col1:
-            if st.button('Evaluate Agent', use_container_width=True, type="primary"):
-                st.session_state.page = 'evaluate'
-                st.experimental_rerun()
-        
-        with button_col2:
-            if st.button('Train Agent', use_container_width=True, type="secondary"):
-                st.session_state.page = 'train'
-                st.experimental_rerun()
 
+        with button_col1:
+            if st.button("Evaluate Agent", use_container_width=True, type="primary"):
+                st.session_state.page = "evaluate"
+                st.rerun()
+
+        with button_col2:
+            if st.button("Train Agent", use_container_width=True, type="secondary"):
+                st.session_state.page = "train"
+                st.rerun()
 
     # Column 2: Hero graphic
     with col2:
-        st.image(use_column_width=True, image='../tower_defense.png')
+        st.image(use_column_width=True, image="../tower_defense.png")
+
 
 def evaluate_page():
     with st.container():
-        if st.button('⬅'):
-            st.session_state.page = 'home'
+        if st.button("⬅"):
+            st.session_state.page = "home"
             st.experimental_rerun()
 
     header_col_1, _, header_col_2 = st.columns([3, 1, 3], gap="small")
 
     with header_col_1:
-        st.title('Evaluate Agent')
-        st.write('Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.')
+        st.title("Evaluate Agent")
+        st.write(
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
+        )
 
     with header_col_2:
         session_files = [path.name for path in session_config_root.iterdir()]
@@ -133,10 +141,10 @@ def evaluate_page():
             index=None,
             on_change=init_primaite,
             key="session_file",
-            placeholder="Select a trained agent..."
+            placeholder="Select a trained agent...",
         )
 
-        evaluate_button = st.button('Start Simulation', type="primary", disabled=False if session_file else True)
+        evaluate_button = st.button("Start Simulation", type="primary", disabled=False if session_file else True)
 
     if not session_file:
         return
@@ -154,13 +162,14 @@ def evaluate_page():
     # Placeholders for tables with static labels
     node_table_label_placeholder = table_col_1.empty()
     node_table_placeholder = table_col_1.empty()
-    
+
     traffic_table_label_placeholder = table_col_2.empty()
     traffic_table_placeholder = table_col_2.empty()
 
-    env_view.pyplot(state.network_fig) # initially populate
+    env_view.pyplot(state.network_fig)  # initially populate
 
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .value-container {
             display: flex;
@@ -199,7 +208,8 @@ def evaluate_page():
         }
         </style>
         """,
-    unsafe_allow_html=True)
+        unsafe_allow_html=True,
+    )
 
     if evaluate_button:
         agent = state.agent
@@ -244,7 +254,7 @@ def evaluate_page():
                     </div>
                 </div>
                 """,
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
 
             changes_html = ""
@@ -254,16 +264,16 @@ def evaluate_page():
                     changes_html += change
             else:
                 changes_html = "<p>No changes</p>"
-            
+
             changes_placeholder.markdown(
                 f"""
                 <div class="value-container observations">
                     <p class="value-label changes-label">Observation Space Changes</p>
                 </div>
                 """,
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
-            
+
             changes_content_placeholder.markdown(changes_html, unsafe_allow_html=True)
 
             # Tables
@@ -273,7 +283,7 @@ def evaluate_page():
                     <p class="value-label changes-label">Nodes</p>
                 </div>
                 """,
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
             traffic_table_label_placeholder.markdown(
                 f"""
@@ -281,7 +291,7 @@ def evaluate_page():
                     <p class="value-label changes-label">Traffic</p>
                 </div>
                 """,
-                unsafe_allow_html=True
+                unsafe_allow_html=True,
             )
             node_table_placeholder.table(env_state.nodes_table)
             traffic_table_placeholder.table(env_state.traffic_table)
@@ -291,18 +301,20 @@ def evaluate_page():
 
 
 def train_page():
-    st.title('Train Agent')
-    st.write('Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas.')
+    st.title("Train Agent")
+    st.write(
+        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer non elit quis augue blandit suscipit. Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas."
+    )
 
-    if st.button('Go Back to Home'):
-        st.session_state.page = 'home'
+    if st.button("Go Back to Home"):
+        st.session_state.page = "home"
         st.experimental_rerun()
-        
+
 
 # navigation logic
-if st.session_state.page == 'home':
+if st.session_state.page == "home":
     home_page()
-elif st.session_state.page == 'evaluate':
+elif st.session_state.page == "evaluate":
     evaluate_page()
-elif st.session_state.page == 'train':
+elif st.session_state.page == "train":
     train_page()
