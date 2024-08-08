@@ -86,7 +86,7 @@ class LLM(torch.nn.Module):
             
         return embs
         
-    def generate_from_embeddings(self, text_embeddings, grad=True, max_new_tokens=10) -> Tuple[List[int], torch.Tensor]:
+    def generate_from_embeddings(self, text_embeddings, grad=True, max_new_tokens=10, restrict_output: bool =True) -> Tuple[List[int], torch.Tensor]:
         next_token_ids = []
         next_token_probs = torch.tensor(())
         n_tokens = 0
@@ -94,29 +94,30 @@ class LLM(torch.nn.Module):
         
         # Generate until otherwise
         while not stop_generating:
+            stop_generating=True # breaking
             if not grad:
                 with torch.no_grad():
                     next_token_embs = self.model.forward(inputs_embeds=text_embeddings)
             else:
                 next_token_embs = self.model.forward(inputs_embeds=text_embeddings)
-            logit =  torch.max(next_token_embs.logits[:, -1, :], dim=-1)
+            # logit =  torch.max(next_token_embs.logits[:, -1, :], dim=-1)
             
-            # Update the logits
-            device = logit.indices.device
-            next_token_ids.append(logit.indices[0])
-            next_token_probs = torch.cat([next_token_probs.to(device), logit.values], dim=0)
-            # Get embeddings of the new token and add a new dimension (to 3d like text_embeddings is)
-            new_embeddings = self.get_embeddings(token_ids=logit.indices).unsqueeze(0)
+            # # Update the logits
+            # device = logit.indices.device
+            # next_token_ids.append(logit.indices[0])
+            # next_token_probs = torch.cat([next_token_probs.to(device), logit.values], dim=0)
+            # # Get embeddings of the new token and add a new dimension (to 3d like text_embeddings is)
+            # new_embeddings = self.get_embeddings(token_ids=logit.indices).unsqueeze(0)
             
-            # Add the new token embeddings to the end of the previous tokens embeddings
-            text_embeddings = torch.cat([text_embeddings, new_embeddings], dim=1)
-            n_tokens += 1
+            # # Add the new token embeddings to the end of the previous tokens embeddings
+            # text_embeddings = torch.cat([text_embeddings, new_embeddings], dim=1)
+            # n_tokens += 1
 
-            # Check for eos token or max_new_tokens limit reached
-            if logit.indices == self.tokenizer.eos_token_id or n_tokens == max_new_tokens:
-                stop_generating = True
+            # # Check for eos token or max_new_tokens limit reached
+            # if logit.indices == self.tokenizer.eos_token_id or n_tokens == max_new_tokens:
+            #     stop_generating = True
                 
-        return next_token_ids, next_token_probs
+        return next_token_embs #next_token_ids, next_token_probs
         
 class GITPolicy(nn.Module):
     def __init__(self, action_space=None, state_space=None, hidden_dim=None, ge_learning_rate=0.0001, ap_learning_rate= 0.0001, llm_device: str ='cuda:0', ap_device: str = 'cuda:1', ge_device: str = 'cuda:1'):
