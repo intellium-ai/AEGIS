@@ -121,7 +121,7 @@ def evaluate_page():
     with st.container():
         if st.button("⬅"):
             st.session_state.page = "home"
-            st.experimental_rerun()
+            st.rerun()
 
     header_col_1, _, header_col_2 = st.columns([3, 1, 3], gap="small")
 
@@ -308,7 +308,7 @@ def train_page():
 
     if st.button("Go Back to Home"):
         st.session_state.page = "home"
-        st.experimental_rerun()
+        st.rerun()
 
 
 # navigation logic
