@@ -130,6 +130,9 @@ class AgentIdentifier(Enum):
     DUMMY = 6
     "The DummyAgent"
     LLM = 7
+    "Da LLM"
+    RANDOM_CARD = 8
+    "Pick a Card Any Card"
 
 
 class HardCodedAgentView(Enum):
