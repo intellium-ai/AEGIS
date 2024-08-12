@@ -15,6 +15,7 @@ from primaite.agents.git.prompts import LLM_PROMPT
 from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
 from primaite.environment import EnvironmentState
 import matplotlib.pyplot as plt
+from primaite.agents.llm.prompting import AgentNodeAction
 import logging
 _LOGGER: Logger = getLogger(__name__)
 
@@ -25,8 +26,13 @@ class GITAgent(AgentSessionABC):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.GIT
+        
         self._setup()
-
+        
+        # Set the node and service maps for prompt - llm - action conversion
+        self.node_mapping = self._env.nodes
+        self.service_mapping = {key + 1: value for key, value in enumerate(self._env.services_list)}
+        
     def _setup(self):
         # you need to find out how to get the probability of each token INTEGER that was produced within the action range, convert this to a tensor and then apply the loss.backward() on this, preceeding a optimizer.backward() pass to update the model weights. Discuss with stefan - will this work?
         if not isinstance(self.session_path, Path):
@@ -59,19 +65,24 @@ class GITAgent(AgentSessionABC):
         state.x = torch.tensor(obs[:9, 1:], dtype=torch.float32).to(device)
         return state
 
-    def _calculate_action(self, obs) -> int:
+    def _calculate_action(self, obs) -> Tuple[int, torch.Tensor]:
+        
         data = self.create_graph(obs)
         prompt = self._build_prompt()
-        result = self._agent(data.x, data.edge_index, prompt)
-        return result
+        llm_action_text, probs = self._agent(data.x, data.edge_index, prompt)
+
+        print(f'LLM Generated Text: {llm_action_text}')    
+        
+        # try:
+            # Validate that the action ID is a valid action integer. If not, fallback to 0.
+        action = self.get_node_action(text_output=llm_action_text).to_node_action(env=self._env).action_id
+        # except:
+        #     action = 0
+        #     logging.warning('An invalid action id was produced, falling back to 0')
+        
+        return action, probs
 
     def _build_prompt(self) -> str:
-        node_str = "\n".join(f"{key}: {value}" for key, value in self._env.nodes.items()) # ID: NODE_NAME
-
-        
-        # For each unique service, assign an ID for it in the format ID: SERVICE
-        node_services_index = self._env.services_list
-        services_str = '\n'.join(f'{i+1}: {service}' for i, service in enumerate(node_services_index))
 
         # Make the service name just TCP or UDP etc, then find the mapping between nodes and what service they have.
         nodes_table = self.env_history[0].nodes_table.rename(columns={'TCP Service State': 'TCP', 'TCP_SQL Service State': 'TCP_SQL', 'UDP Service State': 'UDP'})
@@ -81,26 +92,55 @@ class GITAgent(AgentSessionABC):
             node_services[node['Name']] = []
             
             if node['TCP'] != '-':
-                node_services[node['Name']].append(node_services_index.index('TCP') + 1)
+                # I hate this
+                node_services[node['Name']].append([k for k, v in self.service_mapping.items() if v == 'TCP'][0])
             if node['TCP_SQL'] != '-':
-                node_services[node['Name']].append(node_services_index.index('TCP_SQL') + 1)
+                node_services[node['Name']].append([k for k, v in self.service_mapping.items() if v == 'TCP_SQL'][0])
             if node['UDP'] != '-':
-                node_services[node['Name']].append(node_services_index.index('UDP') + 1)
+                node_services[node['Name']].append([k for k, v in self.service_mapping.items() if v == 'UDP'][0])
         
-        # Combine node services into one string (Node name: service IDs)
+        # Get stringified node map, service map, node services, observation and action history and current observation difference for prompt
+        node_str = "\n".join(f"{key}: {value}" for key, value in self.node_mapping.items()) # ID: NODE_NAME
+        services_str = '\n'.join(f'{i}: {service}' for i, service in enumerate(self.service_mapping))
         node_services_str = "\n".join(f"{key}: {', '.join(str(val) for val in value) if value else 'NONE'}" for key, value in node_services.items())
-        
-        # Get observation/action history string and new enironment observations string
         obs_act_history_str = get_obs_act_history_str(self.env_history, env=self._env)
+        
         if not obs_act_history_str:
             obs_act_history_str = 'No observation history yet...'
         obs_diff_str = obs_diff(EnvironmentState(env=self._env))
-        
-        # Format the prompt for this step
-        prompt = LLM_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str)
 
-        return prompt
-        
+        # Build and return prompt
+        return LLM_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str)
+    
+    def get_node_action(self, text_output) -> AgentNodeAction:
+        splits = text_output.split('.')
+
+        node = self.node_mapping[int(splits[0])]
+        match int(splits[1]):
+            case 1:
+                property_action = 'TURN_ON'
+                node_property = 'HARDWARE'
+            case 2:
+                property_action = 'TURN_OFF'
+                node_property = 'HARDWARE'
+            case 3:
+                property_action = 'RESET'
+                node_property = 'HARDWARE'
+            case 4:
+                property_action = 'PATCH'
+                node_property = 'SOFTWARE'
+            case 5:
+                property_action = 'PATCH'
+                node_property = 'SERVICE'
+
+        # It's a service patch, so look for another integer
+        if int(splits[1]) == 5:
+            service_name = self.service_mapping[int(splits[2])]
+        else:
+            service_name = 'NONE'
+        return AgentNodeAction(node_name=node, node_property=node_property, property_action=property_action, service_name=service_name)
+    
+    
     def evaluate(
         self,
         **kwargs: Any,
@@ -122,8 +162,7 @@ class GITAgent(AgentSessionABC):
 
             while steps < time_steps and not done:
 
-                result = self._calculate_action(obs)
-                action = int(result.indices[0])
+                action, _ = self._calculate_action(obs)
                 obs, rewards, done, _ = self._env.step(action=action)
                 steps += 1
                 rew += rewards
@@ -144,23 +183,7 @@ class GITAgent(AgentSessionABC):
 
             while steps < time_steps and not done:
 
-                data = self.create_graph(obs)
-                prompt = self._build_prompt()
-                token_ids, probs = self._agent(data.x, data.edge_index, prompt)
-                
-                # FIND THE ACTON OUTPUT IN TOKEN_IDS
-                print(self._agent.llm.tokenizer.decode(token_ids, skip_special_tokens=True))
-                
-                # The action output ID is a token ID, so we need to convert it to an integer:
-                action = 1#self._agent.llm.tokenizer.decode(token_ids.indices[0])
-                
-                try:
-                    # Validate that the action ID is a valid action integer. If not, fallback to 0.
-                    action = int(action)
-                    NodeAction.from_id(env=self._env, action_id=action)
-                except:
-                    action = 0
-                    logging.warning('An invalid action id was produced, falling back to 0')
+                action, probs = self._calculate_action(obs)
                 
                 obs, rewards, done, _ = self._env.step(action=action)
                 self._agent.put_data((rewards, probs))

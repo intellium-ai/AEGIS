@@ -7,7 +7,8 @@ from torch.optim import Adam
 from transformers import BertModel, BertTokenizer, BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.llama.modeling_llama import LlamaForCausalLM
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Dict
+import regex as re
 import logging
 import numpy as np
 
@@ -67,6 +68,33 @@ class LLM(torch.nn.Module):
         self.model: LlamaForCausalLM = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.float16, device_map='auto', quantization_config=self.bnb_config)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name, torch_dtype=torch.float16, padding=True, device_map='auto')
         
+        # Figure out what tokens to allow in action generate calls
+        self.filtered_vocab = self._get_filtered_tokenizer_vocab()
+    
+    def _get_filtered_tokenizer_vocab(self) -> Dict[str, int]:
+        # Filter out the tokenizers vocab to make sure we are only getting back what we would expect.
+        filter = r'^[0-9]+$'
+        tokenizer_vocab = self.tokenizer.get_vocab()
+        filtered_vocab = {}
+        for k, v in tokenizer_vocab.items():
+            if re.fullmatch(filter, k):
+                filtered_vocab[k] = v
+            #elif k == self.tokenizer.eos_token:
+            #    self.filtered_vocab[k] = self.tokenizer.eos_token_id
+            elif k == self.tokenizer.bos_token:
+                filtered_vocab[k] = v
+            elif k == 'ass':
+                filtered_vocab[k] = v
+            elif k == 'istant':
+                filtered_vocab[k] = v
+            elif k == '\\':
+                filtered_vocab[k] = v
+            elif k == 'n':
+                filtered_vocab[k] = v
+            elif k == '.':
+                filtered_vocab[k] = v
+        print(filtered_vocab)
+        return filtered_vocab
         
     def get_embeddings(self, prompt: str = None, system: str = None, token_ids: List[int] = None) -> torch.Tensor:
         """Your non-standard .generate"""
@@ -77,7 +105,9 @@ class LLM(torch.nn.Module):
             if system:
                 messages.append({"role": "system", "content": system})
             messages.append({"role": "user", "content": prompt})
-            inputs = self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
+            #inputs = self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
+            inputs = self.tokenizer.encode(text=prompt, return_tensors="pt")
+            #print(self.tokenizer.decode(inputs))
         else:
             inputs = token_ids
             
@@ -88,39 +118,69 @@ class LLM(torch.nn.Module):
         
     def generate_from_embeddings(self, text_embeddings, grad=True, max_new_tokens=10, restrict_output: bool =True) -> Tuple[List[int], torch.Tensor]:
         next_token_ids = []
-        next_token_probs = torch.tensor(())
+        next_token_probs = torch.empty(0)
         n_tokens = 0
         stop_generating = False
         
         # Generate until otherwise
         while not stop_generating:
-            stop_generating=True # breaking
             if not grad:
                 with torch.no_grad():
                     next_token_embs = self.model.forward(inputs_embeds=text_embeddings)
             else:
                 next_token_embs = self.model.forward(inputs_embeds=text_embeddings)
-            # logit =  torch.max(next_token_embs.logits[:, -1, :], dim=-1)
             
-            # # Update the logits
-            # device = logit.indices.device
-            # next_token_ids.append(logit.indices[0])
-            # next_token_probs = torch.cat([next_token_probs.to(device), logit.values], dim=0)
-            # # Get embeddings of the new token and add a new dimension (to 3d like text_embeddings is)
-            # new_embeddings = self.get_embeddings(token_ids=logit.indices).unsqueeze(0)
+            # Apply softmax on the last tokens logits
+            logits = F.softmax(next_token_embs.logits[:, -1, :], dim=-1)
             
-            # # Add the new token embeddings to the end of the previous tokens embeddings
-            # text_embeddings = torch.cat([text_embeddings, new_embeddings], dim=1)
-            # n_tokens += 1
+            # Apply the tokenizer filtering on the output logits
+            token_id, prob = self._filter_logits(logits=logits, prev_token_id=next_token_ids[-1] if next_token_ids else None)
+            
+            # Check what device the output is on
+            device = prob.device
+            
+            # Update logits and token ids
+            next_token_ids.append(token_id)
 
-            # # Check for eos token or max_new_tokens limit reached
-            # if logit.indices == self.tokenizer.eos_token_id or n_tokens == max_new_tokens:
-            #     stop_generating = True
+            #print(next_token_probs).shape
+            next_token_probs = torch.cat([next_token_probs.to(device), prob.unsqueeze(0)], dim=0)
+            # Get embeddings of the new token and add a new dimension (to 3d like text_embeddings is)
+            new_embeddings = self.get_embeddings(token_ids=torch.tensor([token_id])).unsqueeze(0)
+            
+            # Add the new token embeddings to the end of the previous tokens embeddings
+            text_embeddings = torch.cat([text_embeddings, new_embeddings], dim=1)
+            n_tokens += 1
+
+            # Check for eos token or max_new_tokens limit reached
+            if token_id == self.tokenizer.eos_token_id or n_tokens == max_new_tokens:
+                 stop_generating = True
                 
-        return next_token_embs #next_token_ids, next_token_probs
+        return next_token_ids, next_token_probs
         
+    def _filter_logits(self, logits: torch.Tensor, prev_token_id) -> Tuple[int, torch.Tensor]:
+        candidate_tokens = {}
+        for idx in range(logits.shape[-1]):
+            if idx in self.filtered_vocab.values():
+                candidate_tokens[idx] = logits[0][idx]
+                print('Token:', self.tokenizer.decode([idx]))
+
+        # TODO: Instead of taking the max token here, sample the max based on other criteria (IE: don't take another . if a . was in the previous).
+        token_id = max(candidate_tokens, key=lambda k: candidate_tokens[k].max().item())
+        print(f"Prev token: {prev_token_id}. Potential next token {token_id}. Dot ID {self.filtered_vocab['.']}")
+        
+        print(prev_token_id and token_id == self.filtered_vocab['.'] and token_id == prev_token_id)
+        if prev_token_id and token_id == self.filtered_vocab['.'] and token_id == prev_token_id:
+            # Disallow a second ., resample to exclude .
+            print(f'no allowing {token_id} to be sampled')
+            token_id = max((k for k in candidate_tokens if k != '.'), key=lambda k: candidate_tokens[k].max().item())
+            print(f'Sampling {token_id} instead...')
+            
+        prob = candidate_tokens[token_id]
+        return token_id, prob
+            
 class GITPolicy(nn.Module):
     def __init__(self, action_space=None, state_space=None, hidden_dim=None, ge_learning_rate=0.0001, ap_learning_rate= 0.0001, llm_device: str ='cuda:0', ap_device: str = 'cuda:1', ge_device: str = 'cuda:1'):
+        
         super(GITPolicy, self).__init__()
         self.llm_device = llm_device
         self.ap_device = ap_device
@@ -159,9 +219,10 @@ class GITPolicy(nn.Module):
         graph_embs = self.ap(graph_embs).to(torch.float16)
         concatenated_embs = torch.cat([graph_embs.to(self.llm_device), llm_embs.to(self.llm_device)], 1)
 
-        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=10)
+        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=6)
+        response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
         
-        return token_ids, probs#, graph_output
+        return response, probs
 
     def train_net(self, gamma) -> Tuple[float, float]:
         R = 0

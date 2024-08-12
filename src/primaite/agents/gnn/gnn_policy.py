@@ -44,6 +44,8 @@ class GNNPolicy(nn.Module):
         self.roll_out.append(data)
 
     def forward(self, x, edge_index):
+        x = x.to(self.device)
+        edge_index = edge_index.to(self.device)
         x = F.relu(self.conv1(x, edge_index))
         x = global_add_pool(self.layer_norm(x), torch.LongTensor([0 for _ in range(9)]).to(self.device))
         x = F.relu(self.linear(x))
@@ -71,4 +73,7 @@ class GNNPolicy(nn.Module):
             loss = -prob * ((R - G_mean) / G_std)
             loss.backward()
         self.optimizer.step()
+        mean_reward = np.mean([rew[0] for rew in self.roll_out])
         self.roll_out = []
+
+        return loss.cpu().detach().numpy(), mean_reward
