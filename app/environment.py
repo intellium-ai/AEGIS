@@ -53,3 +53,5 @@ def display_env_state(env_state: EnvironmentState):
                     with st.expander("Info"):
                         st.markdown(f"{env_state.prompt}")
             st.divider()
+
+    return fig

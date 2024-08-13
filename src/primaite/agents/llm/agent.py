@@ -220,7 +220,7 @@ class LLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = LLM(base_url="http://192.168.0.8:58084", timeout=120)
+        self._agent = LLM(base_url="http://192.168.0.148:58084", timeout=120)
 
         # Keep track of env history
         self.env_history = [EnvironmentState(self._env)]
