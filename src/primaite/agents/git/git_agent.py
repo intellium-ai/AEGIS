@@ -11,7 +11,7 @@ from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.git.git_policy import GITPolicy
 from primaite.action import NodeAction
-from primaite.agents.git.prompts import LLM_PROMPT
+from primaite.agents.git.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
 from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
 from primaite.environment import EnvironmentState
 import matplotlib.pyplot as plt
@@ -68,14 +68,13 @@ class GITAgent(AgentSessionABC):
     def _calculate_action(self, obs) -> Tuple[int, torch.Tensor]:
         
         data = self.create_graph(obs)
-        prompt = self._build_prompt()
-        llm_action_text, probs = self._agent(data.x, data.edge_index, prompt)
-
-        print(f'LLM Generated Text: {llm_action_text}')    
+        action_prompt, reasoning_prompt = self._build_prompt()
+        llm_action_text, probs, reasoning_statement = self._agent(data.x, data.edge_index, action_prompt, reasoning_prompt)
         
         # try:
             # Validate that the action ID is a valid action integer. If not, fallback to 0.
-        action = self.get_node_action(text_output=llm_action_text).to_node_action(env=self._env).action_id
+        action = self.get_node_action(text_output=llm_action_text)
+        action = action.to_node_action(env=self._env).action_id
         # except:
         #     action = 0
         #     logging.warning('An invalid action id was produced, falling back to 0')
@@ -92,7 +91,6 @@ class GITAgent(AgentSessionABC):
             node_services[node['Name']] = []
             
             if node['TCP'] != '-':
-                # I hate this
                 node_services[node['Name']].append([k for k, v in self.service_mapping.items() if v == 'TCP'][0])
             if node['TCP_SQL'] != '-':
                 node_services[node['Name']].append([k for k, v in self.service_mapping.items() if v == 'TCP_SQL'][0])
@@ -108,14 +106,33 @@ class GITAgent(AgentSessionABC):
         if not obs_act_history_str:
             obs_act_history_str = 'No observation history yet...'
         obs_diff_str = obs_diff(EnvironmentState(env=self._env))
-
-        # Build and return prompt
-        return LLM_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str)
+        
+        # Build and return prompts
+        reasoning_prompt = LLM_REASONING_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str)
+        
+        # Format all except reasoning statement, which is added later (GIT forward pass) after it is generated
+        action_prompt = LLM_PROMPT.format(node_ids=node_str, services=services_str, node_services=node_services_str, obs_act_history=obs_act_history_str, current_obs_diff=obs_diff_str, reasoning_statement='{reasoning_statement}')
+        
+        return action_prompt, reasoning_prompt
     
     def get_node_action(self, text_output) -> AgentNodeAction:
+        """Parses the LLM action output into an AgentNodeAction
+        
+        Args:
+            text_output (str): LLM action output
+        
+        Returns:
+            AgentNodeAction: The parsed AgentNodeAction
+        """
+        
         splits = text_output.split('.')
-
-        node = self.node_mapping[int(splits[0])]
+        
+        # Check for no action
+        if splits[0] == '0':
+            return AgentNodeAction(node_name='NONE', node_property='NONE', property_action='NONE', service_name='NONE')
+        
+        node = str(self.node_mapping[splits[0]])
+        
         match int(splits[1]):
             case 1:
                 property_action = 'TURN_ON'
@@ -138,7 +155,8 @@ class GITAgent(AgentSessionABC):
             service_name = self.service_mapping[int(splits[2])]
         else:
             service_name = 'NONE'
-        return AgentNodeAction(node_name=node, node_property=node_property, property_action=property_action, service_name=service_name)
+            
+        return AgentNodeAction(node_name=str(node), node_property=node_property, property_action=property_action, service_name=service_name)
     
     
     def evaluate(
@@ -184,7 +202,6 @@ class GITAgent(AgentSessionABC):
             while steps < time_steps and not done:
 
                 action, probs = self._calculate_action(obs)
-                
                 obs, rewards, done, _ = self._env.step(action=action)
                 self._agent.put_data((rewards, probs))
 

@@ -42,4 +42,26 @@ You need to be aware of recent changes in the networks state, here is a breakdow
 Now, the following changes have occurred:
 {current_obs_diff}
 
+Here is a statement about your observations: {reasoning_statement}
+
 Specify an action to take as shown above (such as 1.1, 2.3, etc...). Your turn!"""
+
+
+LLM_REASONING_PROMPT = """Your job is to analyse the network that may be under attack. Given the provided network graph tokens, please provide one short statement about your observations and what potential actions could be taken.
+
+The nodes and their respective node ID in the network are:
+{node_ids}
+
+The services and their respective service ID in the network are:
+{services}
+
+Nodes and the services (Service ID) they have running are shown below:
+{node_services}
+
+You need to be aware of recent changes in the networks state, here is a breakdown of what has been happening:
+{obs_act_history}
+
+Now, the following changes have occurred:
+{current_obs_diff}
+
+Provide a statement about your observations and what potential actions could be taken."""
