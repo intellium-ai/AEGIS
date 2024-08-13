@@ -12,6 +12,7 @@ import networkx as nx
 import numpy as np
 from gym import Env, spaces
 from matplotlib import pyplot as plt
+from torch_geometric.utils import from_networkx
 
 from primaite import getLogger
 from primaite.acl.access_control_list import AccessControlList
@@ -281,6 +282,13 @@ class Primaite(Env):
         if self.training_config.agent_framework is AgentFramework.RLLIB and not self.is_eval:
             return self.episode_count - 1
         return self.episode_count
+    
+    @property
+    def adjacancy_matrix(self) -> List[List[int]]:
+        return nx.adjacency_matrix(self.network).todense()
+    
+    def get_torch_geometric_representation(self):
+        return from_networkx(self.network)
 
     def set_as_eval(self) -> None:
         """Set the writers to write to eval directories."""
