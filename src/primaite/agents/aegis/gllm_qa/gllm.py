@@ -1,10 +1,9 @@
 import torch
 from typing import List, Tuple, Dict
-from transformers import BitsAndBytesConfig, AutoModelForCausalLM, AutoTokenizer
 import torch.nn.functional as F
-from torch_geometric.nn import GATConv, LayerNorm, global_add_pool
 from peft.tuners.lora import LoraConfig
-from primaite.agents.git.git_policy import LLM
+from primaite.agents.aegis.modules.llm import LLM
+from primaite.agents.aegis.modules.ge import GraphEmbedding
 
 
 class GLLM(torch.nn.Module):
