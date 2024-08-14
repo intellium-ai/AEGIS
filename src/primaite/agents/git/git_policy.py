@@ -1,28 +1,36 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.nn import GATConv
-from torch_geometric.nn.pool import global_max_pool
+from torch_geometric.nn import GATConv, LayerNorm, global_add_pool
 from torch.optim import Adam
 from transformers import BertModel, BertTokenizer, BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from transformers.models.llama.modeling_llama import LlamaForCausalLM
 from typing import List, Tuple, Dict
 import numpy as np
+import logging
+
+
+logging.getLogger().setLevel(logging.INFO)
 
 
 class GraphEmbedding(nn.Module):
-    def __init__(self, in_channels, output_dim, hidden_dim, device: str = "cuda:1"):
+    def __init__(self, in_channels, output_dim, hidden_dim, n_tokens: int = 10, device: str = "cuda:1"):
         super().__init__()
         self.gat = GATConv(in_channels=in_channels, out_channels=hidden_dim)
-        self.linear = nn.Linear(in_features=hidden_dim, out_features=output_dim)
+        self.layer_norm = LayerNorm(hidden_dim)
+        self.linear = nn.Linear(in_features=hidden_dim, out_features=n_tokens * output_dim)
         self.device = device
+        self.n_tokens = n_tokens
+        self.output_dim = output_dim
 
     def forward(self, x, edge_index):
+        n_nodes = x.shape[0]
         x = self.gat(x.to(self.device), edge_index.to(self.device))
+        x = global_add_pool(self.layer_norm(x), torch.LongTensor([0 for _ in range(n_nodes)]).to(self.device))
         x = F.relu(x)
         x = self.linear(x)
-        x = F.relu(x)
+        x = x.view(self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
         return x
 
 
@@ -39,20 +47,6 @@ class TextEncoder(nn.Module):
         input_ids = self.tokenizer.encode(prompt)
         outputs = self.model(torch.tensor(input_ids).unsqueeze(0).to(self.device))  # type: ignore
         return outputs.last_hidden_state[:, 0, :]
-
-
-class AlignmentProjector(nn.Module):
-    def __init__(self, in_features, out_features, hidden_dim, device: str = "cuda:1") -> None:
-        super().__init__()
-        self.linear1 = nn.Linear(in_features=in_features, out_features=hidden_dim)
-        self.linear2 = nn.Linear(in_features=hidden_dim, out_features=out_features)
-        self.device = device
-
-    def forward(self, x):
-        x = self.linear1(x.to(self.device))
-        x = F.relu(x)
-        x = self.linear2(x)
-        return F.relu(x)
 
 
 class LLM(torch.nn.Module):
@@ -79,6 +73,14 @@ class LLM(torch.nn.Module):
         # Figure out what tokens to allow in action generate calls
         self.filtered_vocab, self.numeric_token_ids = self._get_filtered_tokenizer_vocab()
 
+        # Get start and end graph tag embeddings
+        self.graph_start_emb = self.get_embeddings(prompt="<graph>", apply_chat_tokens=False)
+        self.graph_end_emb = self.get_embeddings(prompt="</graph>", apply_chat_tokens=False)
+        self.close_msg_emb = self.get_embeddings(
+            prompt=self.tokenizer.eos_token + "\n" + self.tokenizer.bos_token + "assistant" + "\n",
+            apply_chat_tokens=False,
+        )
+
     def _get_filtered_tokenizer_vocab(self) -> Tuple[Dict[str, int], Dict[str, int]]:
 
         # Allowed tokens:
@@ -97,22 +99,35 @@ class LLM(torch.nn.Module):
 
         return filtered_vocab, numeric_token_ids
 
-    def get_embeddings(self, prompt: str = None, system: str = None, token_ids: List[int] = None) -> torch.Tensor:
+    def apply_chat_template(self, system: str, prompt: str, close_usr_msg: bool = False) -> str:
+        bos_token = self.tokenizer.bos_token
+        eos_token = self.tokenizer.eos_token
+        conversation = ""
+        if system:
+            conversation += bos_token + "system\n" + system + eos_token + "\n"
+        conversation += bos_token + "user\n" + prompt + "\n"
+        if close_usr_msg:
+            conversation += eos_token
+
+        return conversation
+
+    def _concat_graph_tags(self, graph_embs: torch.Tensor) -> torch.Tensor:
+        """Given graph embeddings, concatenate the start and end tags <graph> ... </graph>"""
+        return torch.cat([self.graph_start_emb, graph_embs, self.graph_end_emb], dim=1)
+
+    def get_embeddings(
+        self, prompt: str = None, token_ids: List[int] = None, system: str = None, apply_chat_tokens: bool = True
+    ) -> torch.Tensor:
         """Your non-standard .generate"""
-        assert prompt or token_ids, "A text prompt or token_ids must be passed to get_input_embeddings"
-
+        assert prompt or token_ids, "A text prompt or list of token ids must be passed to get_embeddings"
         if prompt:
-            messages = []
-            if system:
-                # TODO: Move this outside of the model and use the system prompt !
-                messages.append({"role": "system", "content": system})
-            messages.append({"role": "user", "content": prompt})
-            inputs = self.tokenizer.apply_chat_template(messages, tokenize=True, return_tensors="pt")
-
+            if apply_chat_tokens:
+                inputs = self.apply_chat_template(system=system, prompt=prompt, close_usr_msg=False)
+            elif not apply_chat_tokens and not system:
+                inputs = prompt
+            inputs = self.tokenizer.encode(inputs, return_tensors="pt").to(self.device)
         else:
-            # Just incase we want to get embs from tokens instead at any point
             inputs = token_ids
-
         with torch.no_grad():
             embs = self.model.get_input_embeddings()(inputs)
 
@@ -125,12 +140,6 @@ class LLM(torch.nn.Module):
         next_token_probs = torch.empty(0)
         n_tokens = 0
         stop_generating = False
-
-        # Get the embeddings of the start of the assistant message and append it to the input text_embeddings
-        assistant_embeddings = self.model.get_input_embeddings()(
-            self.tokenizer.encode(text="<|im_start|>assistant\n", return_tensors="pt")
-        )
-        text_embeddings = torch.cat([text_embeddings, assistant_embeddings], dim=1)
 
         # Generate stop token of max_new_tokens reached
         while not stop_generating:
@@ -201,10 +210,10 @@ class GITPolicy(nn.Module):
         state_space: int = None,
         hidden_dim: int = None,
         ge_learning_rate: float = 0.0001,
-        ap_learning_rate: float = 0.0001,
         llm_device: str = "cuda:0",
         ap_device: str = "cuda:1",
         ge_device: str = "cuda:1",
+        n_graph_tokens: int = 10,
     ):
 
         super(GITPolicy, self).__init__()
@@ -224,19 +233,16 @@ class GITPolicy(nn.Module):
         self.llm_embedding_size = self.llm.get_embeddings(prompt="hack").shape[2]
 
         self.ge = GraphEmbedding(
-            in_channels=state_space, hidden_dim=hidden_dim, output_dim=self.llm_embedding_size, device=ge_device
+            in_channels=state_space,
+            hidden_dim=hidden_dim,
+            output_dim=self.llm_embedding_size,
+            device=ge_device,
+            n_tokens=n_graph_tokens,
         ).to(self.ge_device)
-        self.ap = AlignmentProjector(
-            in_features=self.llm_embedding_size,
-            hidden_dim=self.llm_embedding_size,
-            out_features=self.llm_embedding_size,
-            device=ap_device,
-        ).to(self.ap_device)
 
         # For tracking episode rewards and probs
         self.roll_out = []
         self.ge_optimizer = Adam(self.ge.parameters(), lr=ge_learning_rate)
-        self.ap_optimizer = Adam(self.ap.parameters(), lr=ap_learning_rate)
 
     def put_data(self, data):
         self.roll_out.append(data)
@@ -244,31 +250,34 @@ class GITPolicy(nn.Module):
     def forward(self, x, edge_index, action_prompt, reasoning_prompt):
         """This should return the action integer"""
 
-        # 1.0 - Reason about the network (no grad)
+        # 1.0 - Get the graph token(s)
+        graph_output = self.ge(x, edge_index)
+        graph_embs = graph_output.unsqueeze(0).to(torch.float16)  # Match graph embs with LLM dimensionality
+        graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
+
+        # 2.0 - Reason about the network (no grad) with graph tokens too
         reasoning_embs = self.llm.get_embeddings(prompt=reasoning_prompt)
+        concatenated_embs = torch.cat([reasoning_embs.to(self.llm_device), graph_embs.to(self.llm_device)], dim=1)
+        concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
+
         token_ids, probs = self.llm.generate_from_embeddings(
             text_embeddings=reasoning_embs, grad=False, restrict_output=False, max_new_tokens=100
-        )
+        )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
 
-        # 2.0 - Get the graph token(s)
-        graph_output = self.ge(x, edge_index)
-        graph_embs = graph_output.unsqueeze(0)  # Match graph embs with LLM dimensionality
-
-        # 3.0 - Project the graph embeddings through the alignment projector
-        graph_embs = self.ap(graph_embs).to(torch.float16)
-
-        # 4.0 - Get the combined embeddings of graph and text tokens.
+        # 3.0 - Get the combined embeddings of graph and text tokens.
         llm_embs = self.llm.get_embeddings(prompt=action_prompt.format(reasoning_statement=reasoning_statement))
-        concatenated_embs = torch.cat([graph_embs.to(self.llm_device), llm_embs.to(self.llm_device)], dim=1)
+        concatenated_embs = torch.cat([llm_embs.to(self.llm_device), graph_embs.to(self.llm_device)], dim=1)
+        concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
 
-        # 5.0 - Generate the next action
+        # 4.0 - Generate the next action
         token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=5)
         response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
-        print(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
+
+        logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
         return response, probs, reasoning_statement
 
-    def train_net(self, gamma) -> Tuple[float, float]:
+    def train_net(self, gamma: float = 0.99) -> Tuple[float, float]:
         R = 0
         G = []
         G_t = 0
@@ -292,7 +301,6 @@ class GITPolicy(nn.Module):
             loss.backward()
 
         self.ge_optimizer.step()
-        self.ap_optimizer.step()
 
         # Get average reward and reset rollout
         mean_reward = np.mean([rew[0] for rew in self.roll_out])

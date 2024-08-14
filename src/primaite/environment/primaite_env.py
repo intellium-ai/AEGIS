@@ -282,11 +282,11 @@ class Primaite(Env):
         if self.training_config.agent_framework is AgentFramework.RLLIB and not self.is_eval:
             return self.episode_count - 1
         return self.episode_count
-    
+
     @property
     def adjacancy_matrix(self) -> List[List[int]]:
         return nx.adjacency_matrix(self.network).todense()
-    
+
     def get_torch_geometric_representation(self):
         return from_networkx(self.network)
 

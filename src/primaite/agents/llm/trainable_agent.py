@@ -100,7 +100,7 @@ class TrainableLLM:
         with torch.no_grad():
             gen_tokens = self.ppo_trainer.generate(tokens, **generation_kwargs)
 
-        response = self.tokenizer.decode(gen_tokens[0][:len(tokens)])
+        response = self.tokenizer.decode(gen_tokens[0][: len(tokens)])
         return response
 
     def _build_action_prompt(
@@ -141,7 +141,7 @@ class TrainableLLM:
 
         response = self.generate(prompt=prompt)
         digits = regex.findall(r"\d+", response)
-        
+
         action = int(digits[-1]) if digits else 0
         return action, prompt, "reason"
 
@@ -166,7 +166,7 @@ class TrainableLLMAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
         self._agent = TrainableLLM(model_name="bigscience/bloomz-560m", timeout=120)
-        
+
         adj = nx.adjacency_matrix(self._env.network).todense()
         print(adj)
 
@@ -208,17 +208,13 @@ class TrainableLLMAgent(AgentSessionABC):
                 obs = torch.tensor(obs).flatten(0)  # Flatten all dimensions except the last
 
                 # Ensure action is 2D
-                action = torch.tensor(action, device='cuda:0').view(1, -1)
+                action = torch.tensor(action, device="cuda:0").view(1, -1)
 
                 # Ensure rewards is 2D
-                rewards = torch.tensor(rewards, device='cuda:0').view(1, -1)
+                rewards = torch.tensor(rewards, device="cuda:0").view(1, -1)
 
                 # Now call the step function
-                stats = self._agent.ppo_trainer.step(
-                    [obs.to('cuda:0')],
-                    action,
-                    rewards
-                )
+                stats = self._agent.ppo_trainer.step([obs.to("cuda:0")], action, rewards)
 
                 steps += 1
                 episode_reward += rewards

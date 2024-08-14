@@ -37,7 +37,9 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GNNPolicy(state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001, device=device).to(device)
+        self._agent = GNNPolicy(
+            state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001, device=device
+        ).to(device)
 
         print(self._agent)
 
@@ -100,7 +102,7 @@ class GNNAgent(AgentSessionABC):
         self.is_eval = False
         losses = []
         mean_rewards = []
-        
+
         for ep in range(episodes):
             obs = self._env.reset()
             done, steps, rew = False, 0, 0
@@ -108,7 +110,7 @@ class GNNAgent(AgentSessionABC):
             while steps < time_steps and not done:
                 data = self.create_graph(obs)
                 a_prob = self._agent(data.x, data.edge_index)
-                
+
                 a_distrib = Categorical(torch.exp(a_prob))
                 action = a_distrib.sample().item()
 
@@ -131,21 +133,21 @@ class GNNAgent(AgentSessionABC):
         super().learn()
 
         self._plot_av_reward_per_episode(True)
-        
+
     def _save_training_fig(self, losses, mean_rewards):
-        plt.plot(losses, label='Loss')
-        #plt.plot(mean_reward, label='Avg Reward')
-        plt.xlabel('Episode #')
-        plt.ylabel('Loss')
-        plt.savefig('./loss.png')
-        
+        plt.plot(losses, label="Loss")
+        # plt.plot(mean_reward, label='Avg Reward')
+        plt.xlabel("Episode #")
+        plt.ylabel("Loss")
+        plt.savefig("./loss.png")
+
         plt.close()
-        plt.plot(mean_rewards, label='Avg Reward')
-        plt.xlabel('Episode #')
-        plt.ylabel('Avg Reward')
-        plt.savefig('./avg_reward.png')
+        plt.plot(mean_rewards, label="Avg Reward")
+        plt.xlabel("Episode #")
+        plt.ylabel("Avg Reward")
+        plt.savefig("./avg_reward.png")
         plt.close()
-            
+
     def _get_latest_checkpoint(self):
         pass
 
