@@ -24,7 +24,7 @@ deep_learning_framework: TF2
 # "DO_NOTHING" (The DoNothing agents coupled with an ACL or NODE action_type)
 # "RANDOM" (primaite.agents.simple.RandomAgent)
 # "DUMMY" (primaite.agents.simple.DummyAgent)
-agent_identifier: LLM
+agent_identifier: GIT
 
 # Sets whether Red Agent POL and IER is randomised.
 # Options are:
@@ -65,16 +65,16 @@ observation_space:
     # - name: ACCESS_CONTROL_LIST
 
 # Number of episodes for training to run per session
-num_train_episodes: 500
+num_train_episodes: 512
 
 # Number of time_steps for training per episode
-num_train_steps: 256
+num_train_steps: 8
 
 # Number of episodes for evaluation to run per session
-num_eval_episodes: 10
+num_eval_episodes: 8
 
 # Number of time_steps for evaluation per episode
-num_eval_steps: 10
+num_eval_steps: 256
 
 # Sets how often the agent will save a checkpoint (every n time episodes).
 # Set to 0 if no checkpoints are required. Default is 10
@@ -87,7 +87,7 @@ time_delay: 5
 # "TRAIN" (Trains an agent)
 # "EVAL" (Evaluates an agent)
 # "TRAIN_EVAL" (Trains then evaluates an agent)
-session_type: EVAL
+session_type: TRAIN
 
 # Environment config values
 # The high value for the observation space
