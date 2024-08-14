@@ -5,7 +5,7 @@ from torch_geometric.nn import GATConv, LayerNorm, global_add_pool
 from torch.optim import Adam
 from transformers import BertModel, BertTokenizer, BitsAndBytesConfig
 from transformers import AutoModelForCausalLM, AutoTokenizer
-from transformers.models.llama.modeling_llama import LlamaForCausalLM
+from peft.tuners.lora import LoraConfig
 from typing import List, Tuple, Dict
 import numpy as np
 import logging
@@ -50,9 +50,8 @@ class TextEncoder(nn.Module):
 
 
 class LLM(torch.nn.Module):
-    def __init__(self, model_name="HuggingFaceTB/SmolLM-1.7B-Instruct", device: str = "cuda:0"):
+    def __init__(self, model_name="HuggingFaceTB/SmolLM-1.7B-Instruct", peft_config: LoraConfig = None):
         super().__init__()
-        self.device = device
 
         # Initialise quantisation config
         self.bnb_config = BitsAndBytesConfig(
@@ -61,10 +60,14 @@ class LLM(torch.nn.Module):
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
-
+        self.peft_config = peft_config
         # Use accelerate device mapping to distribute the model across all available cuda devices.
-        self.model: LlamaForCausalLM = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=torch.float16, device_map="auto", quantization_config=self.bnb_config
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            quantization_config=self.bnb_config,
+            peft_config=self.peft_config,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name, torch_dtype=torch.float16, padding=True, device_map="auto"
@@ -125,7 +128,7 @@ class LLM(torch.nn.Module):
                 inputs = self.apply_chat_template(system=system, prompt=prompt, close_usr_msg=False)
             elif not apply_chat_tokens and not system:
                 inputs = prompt
-            inputs = self.tokenizer.encode(inputs, return_tensors="pt").to(self.device)
+            inputs = self.tokenizer.encode(inputs, return_tensors="pt")
         else:
             inputs = token_ids
         with torch.no_grad():

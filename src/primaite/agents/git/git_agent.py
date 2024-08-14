@@ -52,7 +52,6 @@ class GITAgent(AgentSessionABC):
             hidden_dim=128,
             n_graph_tokens=20,
             ge_learning_rate=0.0001,
-            llm_device="cuda:0",
             ge_device="cuda:0",
         )
 
