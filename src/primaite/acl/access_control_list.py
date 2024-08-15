@@ -115,10 +115,10 @@ class AccessControlList:
         # Checks position is in correct range
         if self.max_acl_rules - 1 > position_index > -1:
             try:
-                _LOGGER.info(f"Position {position_index} is valid.")
+                # _LOGGER.info(f"Position {position_index} is valid.")
                 # Check to see Agent will not overwrite current ACL in ACL list
                 if self._acl[position_index] is None:
-                    _LOGGER.info(f"Inserting rule {new_rule} at position {position_index}")
+                    # _LOGGER.info(f"Inserting rule {new_rule} at position {position_index}")
                     # Adds rule
                     self._acl[position_index] = new_rule
                 else:

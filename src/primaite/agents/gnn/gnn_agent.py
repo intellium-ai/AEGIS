@@ -10,16 +10,18 @@ from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.gnn.gnn_policy import GNNPolicy
+import matplotlib.pyplot as plt
 
 _LOGGER: Logger = getLogger(__name__)
 
-device = "cpu"
+device = "cuda:0"
 
 
 class GNNAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
+        print(self._training_config.agent_identifier)
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
         self._setup()
 
@@ -35,7 +37,9 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GNNPolicy(6, action_space=100, hidden_dim=128, learning_rate=0.0001).to(device)
+        self._agent = GNNPolicy(
+            state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001, device=device
+        ).to(device)
 
         print(self._agent)
 
@@ -96,6 +100,8 @@ class GNNAgent(AgentSessionABC):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
+        losses = []
+        mean_rewards = []
 
         for ep in range(episodes):
             obs = self._env.reset()
@@ -104,6 +110,7 @@ class GNNAgent(AgentSessionABC):
             while steps < time_steps and not done:
                 data = self.create_graph(obs)
                 a_prob = self._agent(data.x, data.edge_index)
+
                 a_distrib = Categorical(torch.exp(a_prob))
                 action = a_distrib.sample().item()
 
@@ -115,7 +122,10 @@ class GNNAgent(AgentSessionABC):
                 rew += rewards
                 self._save_checkpoint()
 
-            self._agent.train_net(0.99)
+            loss, mean_reward = self._agent.train_net(0.99)
+            losses.append(loss)
+            mean_rewards.append(mean_reward)
+            self._save_training_fig(losses, mean_rewards)
             self._env._write_av_reward_per_episode()
             self.save()
 
@@ -123,6 +133,20 @@ class GNNAgent(AgentSessionABC):
         super().learn()
 
         self._plot_av_reward_per_episode(True)
+
+    def _save_training_fig(self, losses, mean_rewards):
+        plt.plot(losses, label="Loss")
+        # plt.plot(mean_reward, label='Avg Reward')
+        plt.xlabel("Episode #")
+        plt.ylabel("Loss")
+        plt.savefig("./loss.png")
+
+        plt.close()
+        plt.plot(mean_rewards, label="Avg Reward")
+        plt.xlabel("Episode #")
+        plt.ylabel("Avg Reward")
+        plt.savefig("./avg_reward.png")
+        plt.close()
 
     def _get_latest_checkpoint(self):
         pass

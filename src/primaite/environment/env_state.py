@@ -77,7 +77,7 @@ class EnvironmentState:
                 diff.append(link_change_str)
 
         return diff
-    
+
     @property
     def adjacency_matrix(self):
         return self.env.adjacancy_matrix
