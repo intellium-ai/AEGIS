@@ -3,25 +3,13 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Final, List
 
-from primaite.common.enums import (
-    FileSystemState,
-    HardwareState,
-    NodeType,
-    Priority,
-    SoftwareState,
-)
+from primaite.common.enums import FileSystemState, HardwareState, NodeType, Priority, SoftwareState
 
 
 class Service(Enum):
     TCP = "TCP"
     UDP = "UDP"
     TCP_SQL = "TCP_SQL"
-
-
-class Serializable(ABC):
-
-    @abstractmethod
-    def dict(self) -> Dict[str, Any]: ...
 
 
 @dataclass
@@ -84,7 +72,7 @@ class Node(Serializable):
         self.file_system_state = file_system_state.name
         self.services = services
 
-    def dict(self):
+    def serialize(self):
         state_dict = {}
         for k, v in self.__dict__.items():
             if not isinstance(v, list):

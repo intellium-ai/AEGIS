@@ -1,6 +1,6 @@
 import typer
 import typer.rich_utils
-from primaite.graph import NetworkGenerator
+from primaite.network import NetworkGenerator
 
 
 def main(num_nodes: int, num_links: int, num_services: int):

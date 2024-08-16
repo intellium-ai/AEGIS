@@ -206,3 +206,13 @@ class ActiveNode(Node):
         if self.booting_count <= 0:
             self.file_system_state_actual = FileSystemState.GOOD
             self.software_state = SoftwareState.GOOD
+
+    def is_working(self) -> bool:
+        if self.hardware_state.value > 1:
+            return False
+        if self.software_state.value > 1:
+            return False
+        if self.file_system_state_observed.value > 1:
+            return False
+
+        return super().is_working()

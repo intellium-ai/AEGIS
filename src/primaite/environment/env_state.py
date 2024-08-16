@@ -94,7 +94,7 @@ class EnvironmentState:
         for G_node in G:
             node_id = G_node.node_id
             node = self.nodes[node_id]
-            if _is_working(node):
+            if node.is_working():
                 node_color_map.append("tab:blue")
             else:
                 node_color_map.append("tab:red")
@@ -196,20 +196,3 @@ def get_nodes_table(env: Primaite) -> pd.DataFrame:
     nodes_table.replace({"NONE": "-"}, inplace=True)
 
     return nodes_table
-
-
-def _is_working(node: Node) -> bool:
-    if node.hardware_state.value > 1:
-        return False
-    if isinstance(node, ActiveNode):
-        if node.software_state.value > 1:
-            return False
-        if node.file_system_state_observed.value > 1:
-            return False
-
-    if isinstance(node, ServiceNode):
-        for s in list(node.services.values()):
-            if s.software_state.value > 1:
-                return False
-
-    return True

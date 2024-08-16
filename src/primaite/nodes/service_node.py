@@ -190,3 +190,10 @@ class ServiceNode(ActiveNode):
         if self.booting_count <= 0:
             for service in self.services.values():
                 service.software_state = SoftwareState.GOOD
+
+    def is_working(self) -> bool:
+        for s in list(self.services.values()):
+            if s.software_state.value > 1:
+                return False
+
+        return super().is_working()

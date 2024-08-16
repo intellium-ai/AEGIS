@@ -2,10 +2,11 @@
 """The link class."""
 from typing import List
 
+from primaite.common.custom_typing import Serializable
 from primaite.common.protocol import Protocol
 
 
-class Link(object):
+class Link(Serializable):
     """Link class."""
 
     def __init__(
@@ -34,6 +35,8 @@ class Link(object):
         # Add the default protocols
         for protocol_name in _services:
             self.add_protocol(protocol_name)
+
+    def serialize(self) -> dict: ...
 
     def add_protocol(self, _protocol: str) -> None:
         """
