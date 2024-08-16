@@ -10,7 +10,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 class GraphEmbedding(nn.Module):
     def __init__(
-        self, in_channels, output_dim, hidden_dim, n_tokens: int = 10, device: str = "cuda:1", n_gat_layers: int = 3
+        self, in_channels, output_dim, hidden_dim, n_tokens: int = 10, device: str = "cuda:0", n_gat_layers: int = 3
     ):
         super().__init__()
         self.gat = GATConv(in_channels=in_channels, out_channels=hidden_dim)

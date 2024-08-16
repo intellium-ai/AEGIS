@@ -68,10 +68,10 @@ observation_space:
 num_train_episodes: 512
 
 # Number of time_steps for training per episode
-num_train_steps: 8
+num_train_steps: 256
 
 # Number of episodes for evaluation to run per session
-num_eval_episodes: 8
+num_eval_episodes: 512
 
 # Number of time_steps for evaluation per episode
 num_eval_steps: 256

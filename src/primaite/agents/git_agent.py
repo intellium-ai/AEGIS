@@ -48,7 +48,6 @@ class GITAgent(AgentSessionABC):
 
         self._agent = GITPolicy(
             state_space=6,
-            action_space=100,
             hidden_dim=128,
             n_graph_tokens=20,
             ge_learning_rate=0.0001,

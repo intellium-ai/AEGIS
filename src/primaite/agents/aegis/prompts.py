@@ -65,3 +65,9 @@ Now, the following changes have occurred:
 {current_obs_diff}
 
 Provide a statement about your observations and what potential actions could be taken."""
+
+
+GLLM_PROMPT = """Your task is to answer the given question about a network using the provided context. Your answer should be very brief, it may even be as simple as a single word or number.
+Question: {question}.
+Context:
+{context}"""

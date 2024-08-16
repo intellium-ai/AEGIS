@@ -7,7 +7,11 @@ from typing import List, Tuple, Dict
 
 
 class LLM(torch.nn.Module):
-    def __init__(self, model_name="HuggingFaceTB/SmolLM-1.7B-Instruct", peft_config: LoraConfig = None):
+    def __init__(
+        self,
+        model_name="HuggingFaceTB/SmolLM-1.7B-Instruct",
+        peft_config: LoraConfig = None,
+    ):
         super().__init__()
 
         # Initialise quantisation config
@@ -40,6 +44,9 @@ class LLM(torch.nn.Module):
             prompt=self.tokenizer.eos_token + "\n" + self.tokenizer.bos_token + "assistant" + "\n",
             apply_chat_tokens=False,
         )
+
+        # Hacky way to get the size of each tokens embedding - this helps us to align the GNN and LLM output shapes later.
+        self.llm_embedding_size = self.get_embeddings(prompt="hack", apply_chat_tokens=False).shape[2]
 
     def _get_filtered_tokenizer_vocab(self) -> Tuple[Dict[str, int], Dict[str, int]]:
 
@@ -76,10 +83,17 @@ class LLM(torch.nn.Module):
         return torch.cat([self.graph_start_emb, graph_embs, self.graph_end_emb], dim=1)
 
     def get_embeddings(
-        self, prompt: str = None, token_ids: List[int] = None, system: str = None, apply_chat_tokens: bool = True
+        self,
+        prompt: str = None,
+        token_ids: List[int] = None,
+        system: str = None,
+        apply_chat_tokens: bool = True,
+        grad: bool = False,
     ) -> torch.Tensor:
         """Your non-standard .generate"""
-        assert prompt or token_ids, "A text prompt or list of token ids must be passed to get_embeddings"
+        assert (
+            prompt is not None or token_ids is not None
+        ), "A text prompt or list of token ids must be passed to get_embeddings"
         if prompt:
             if apply_chat_tokens:
                 inputs = self.apply_chat_template(system=system, prompt=prompt, close_usr_msg=False)
@@ -88,9 +102,11 @@ class LLM(torch.nn.Module):
             inputs = self.tokenizer.encode(inputs, return_tensors="pt")
         else:
             inputs = token_ids
-        with torch.no_grad():
-            embs = self.model.pretrained_model.get_input_embeddings()(inputs)
-
+        if not grad:
+            with torch.no_grad():
+                embs = self.model.pretrained_model.get_input_embeddings()(inputs)
+        else:
+            embs = self.model.pretrained_model.get_input_embeddings()(inputs).requires_grad_(True)
         return embs
 
     def generate_from_embeddings(

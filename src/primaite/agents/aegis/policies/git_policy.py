@@ -15,7 +15,6 @@ logging.getLogger().setLevel(logging.INFO)
 class GITPolicy(nn.Module):
     def __init__(
         self,
-        action_space: int = None,
         state_space: int = None,
         hidden_dim: int = None,
         ge_learning_rate: float = 0.0001,
@@ -32,19 +31,15 @@ class GITPolicy(nn.Module):
 
         # space size check
         assert state_space is not None, "None state_space input: state_space should be assigned."
-        assert action_space is not None, "None action_space input: action_space should be assigned."
         if hidden_dim is None:
             hidden_dim = state_space * 2
 
         self.llm = LLM()
 
-        # Hacky way to get the size of each tokens embedding - this helps us to align the GNN and LLM output shapes later.
-        self.llm_embedding_size = self.llm.get_embeddings(prompt="hack").shape[2]
-
         self.ge = GraphEmbedding(
             in_channels=state_space,
             hidden_dim=hidden_dim,
-            output_dim=self.llm_embedding_size,
+            output_dim=self.llm.llm_embedding_size,
             device=ge_device,
             n_tokens=n_graph_tokens,
         ).to(self.ge_device)
