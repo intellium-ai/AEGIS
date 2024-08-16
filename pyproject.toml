@@ -49,6 +49,7 @@ dependencies = [
     "transformers==4.42.4",
     "wandb==0.17.5",
     "bitsandbytes",
+    "openai==1.40.8"
 ]
 
 [tool.setuptools.dynamic]

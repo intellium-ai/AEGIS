@@ -64,7 +64,7 @@ class GLLM(torch.nn.Module):
 
         # 3.0 - Generate the next action
         token_ids, probs = self.llm.generate_from_embeddings(
-            text_embeddings=concatenated_embs, max_new_tokens=10, restrict_output=False, grad=False
+            text_embeddings=concatenated_embs, max_new_tokens=10, restrict_output=False, grad=True
         )
         gllm_response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
 
@@ -90,29 +90,29 @@ class GLLM(torch.nn.Module):
             openai_responses.append(self.openai.generate(prompt=openai_prompt))
 
         for episode in range(50):
+            # Reset gradients
+            self.ge_optimizer.zero_grad()
             for idx, question in enumerate(questions):
                 gllm_prompt = self._build_prompt(question=question, network_desc=network_desc, model="gllm")
                 gllm_response = self(x, edge_index, gllm_prompt)
                 gllm_responses.append(gllm_response)
+                
+            loss = self.get_cosine_embeddings_loss(
+                openai_responses, gllm_responses
+            )
 
-                # Reset gradients
-                self.ge_optimizer.zero_grad()
-                loss, openai_response_embs, gllm_response_embs = self.get_cosine_embeddings_loss(
-                    openai_responses[idx], gllm_response
-                )
-
-                # Do the backwards pass
-                loss.backward()
-                self.ge_optimizer.step()
-                self.llm_optimizer.step()
+            # Do the backwards pass
+            loss.backward()
+            self.ge_optimizer.step()
+            self.llm_optimizer.step()
             print(f"Episode {episode} Loss:", loss.item())
 
         return gllm_responses, openai_responses
 
     def get_cosine_embeddings_loss(self, openai_response, gllm_response):
 
-        openai_tokens = self.llm.tokenizer.encode(openai_response, return_tensors="pt").squeeze(0)
-        gllm_tokens = self.llm.tokenizer.encode(gllm_response, return_tensors="pt").squeeze(0)
+        openai_tokens = self.llm.tokenizer.batch_encode_plus(openai_response, return_tensors="pt").squeeze(0)
+        gllm_tokens = self.llm.tokenizer.batch_encode_plus(gllm_response, return_tensors="pt").squeeze(0)
 
         openai_tokens, gllm_tokens = self._pad_smallest_text(openai_tokens=openai_tokens, gllm_tokens=gllm_tokens)
 
@@ -125,7 +125,7 @@ class GLLM(torch.nn.Module):
         # except:
         #     loss = -1
 
-        return loss, openai_response_embs, gllm_response_embs
+        return loss
 
     def _pad_smallest_text(self, openai_tokens, gllm_tokens):
         if len(openai_tokens) > len(gllm_tokens):
