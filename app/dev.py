@@ -8,10 +8,9 @@ from primaite.primaite_session import AgentIdentifier, PrimaiteSession
 
 st.set_page_config(layout="wide", page_title="Home")
 
-config_path = Path("../src/primaite/config/_package_data/")
-lay_down_config_root = config_path / "lay_down"
-training_config_root = config_path / "training"
-session_config_root = Path("trained_agents")
+lay_down_config_root = Path("../data/laydown-configs/")
+training_config_root = Path("../agents/training_configs/")
+session_config_root = Path("../agents/trained_agents/")
 
 # initialise session state for navigation if it doesn't exist
 if "page" not in st.session_state:

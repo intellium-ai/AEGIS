@@ -7,10 +7,9 @@ class BaseNetworkGenerator(ABC):
 
     @abstractmethod
     def generate(self, **kwargs) -> Network: ...
-    
 
-class GENINDNetworkGenerator(BaseNetworkGenerator):
-    
+
+class GENINDNetworkGenerator(BaseNetworkGenerator): ...
 
 
 # class NetworkGenerator:

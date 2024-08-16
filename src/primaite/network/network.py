@@ -19,6 +19,7 @@ class Network(Serializable):
     nodes_dict: dict[str, NodeUnion]
     links_dict: dict[str, Link]
     service_names: list[str]
+    ports_list: list[str]
     graph: nx.Graph
 
     @classmethod
@@ -27,8 +28,9 @@ class Network(Serializable):
         links_dict = deepcopy(env.links)
         graph = env.network.copy()
         service_names = env.services_list
+        ports_list = env.ports_list
 
-        return cls(nodes_dict, links_dict, service_names, graph)
+        return cls(nodes_dict, links_dict, service_names, ports_list, graph)
 
     @cached_property
     def nodes(self) -> list[Node]:
@@ -140,3 +142,11 @@ class Network(Serializable):
         nx.draw_networkx_edge_labels(G, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
 
         return fig
+
+    def serialize(self):
+        ports = {"item_type": "PORTS", "ports_list": [{"port": f"{port}"} for port in self.ports_list]}
+        services = {"item_type": "SERVICES", "service_list": [{"name": f"{service}"} for service in self.service_names]}
+        nodes = [node.serialize() for node in self.nodes]
+        links = [link.serialize() for link in self.links]
+
+        return [ports, services, nodes, links]

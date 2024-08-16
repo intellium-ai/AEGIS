@@ -24,11 +24,10 @@ from primaite.common.enums import (
     AgentIdentifier,
     FileSystemState,
     HardwareState,
+    IERType,
     NodePOLInitiator,
     NodePOLType,
     NodeType,
-    ObservationType,
-    Priority,
     RulePermissionType,
     SessionType,
     SoftwareState,
@@ -868,10 +867,11 @@ class Primaite(Env):
 
         # Add link to link dictionary
         self.links[link_name] = Link(
+            link_name,
             link_id,
             link_bandwidth,
-            source_node.name,
-            dest_node.name,
+            source_node.node_id,
+            dest_node.node_id,
             self.services_list,
         )
 
@@ -884,10 +884,11 @@ class Primaite(Env):
 
         # Add link to link dictionary (reference)
         self.links_reference[link_name] = Link(
+            link_name,
             link_id,
             link_bandwidth,
-            source_node_ref.name,
-            dest_node_ref.name,
+            source_node_ref.node_id,
+            dest_node_ref.node_id,
             self.services_list,
         )
 
@@ -910,6 +911,7 @@ class Primaite(Env):
 
         # Create IER and add to green IER dictionary
         self.green_iers[ier_id] = IER(
+            IERType.GREEN_IER,
             ier_id,
             ier_start_step,
             ier_end_step,
@@ -921,6 +923,7 @@ class Primaite(Env):
             ier_mission_criticality,
         )
         self.green_iers_reference[ier_id] = IER(
+            IERType.GREEN_IER,
             ier_id,
             ier_start_step,
             ier_end_step,
@@ -951,6 +954,7 @@ class Primaite(Env):
 
         # Create IER and add to red IER dictionary
         self.red_iers[ier_id] = IER(
+            IERType.RED_IER,
             ier_id,
             ier_start_step,
             ier_end_step,
@@ -1376,10 +1380,11 @@ class Primaite(Env):
                 possible_ier_destinations = [server.node_id for server in servers]
             ier_dest = choice(possible_ier_destinations)
             self.red_iers[ier_id] = IER(
+                IERType.RED_IER,
                 ier_id,
                 ier_start_step,
                 ier_end_step,
-                ier_load,
+                int(ier_load),
                 ier_protocol,
                 ier_port,
                 node.node_id,

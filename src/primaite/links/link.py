@@ -11,10 +11,11 @@ class Link(Serializable):
 
     def __init__(
         self,
+        _name: str,
         _id: str,
         _bandwidth: int,
-        _source_node_name: str,
-        _dest_node_name: str,
+        _source_node_id: str,
+        _dest_node_id: str,
         _services: List[str],
     ) -> None:
         """
@@ -26,17 +27,28 @@ class Link(Serializable):
         :param _dest_node_name: The name of the destination node
         :param _protocols: The protocols to add to the link
         """
+        self.name = _name
         self.id: str = _id
         self.bandwidth: int = _bandwidth
-        self.source_node_name: str = _source_node_name
-        self.dest_node_name: str = _dest_node_name
+        self.source_node_id: str = _source_node_id
+        self.dest_node_id: str = _dest_node_id
         self.protocol_list: List[Protocol] = []
 
         # Add the default protocols
         for protocol_name in _services:
             self.add_protocol(protocol_name)
 
-    def serialize(self) -> dict: ...
+    def serialize(self):
+        state_dict = {}
+
+        state_dict["item_type"] = "LINK"
+        state_dict["id"] = self.id
+        state_dict["name"] = self.name
+        state_dict["bandwidth"] = self.bandwidth
+        state_dict["source"] = self.source_node_id
+        state_dict["destination"] = self.dest_node_id
+
+        return state_dict
 
     def add_protocol(self, _protocol: str) -> None:
         """
@@ -59,24 +71,6 @@ class Link(Serializable):
              Link ID
         """
         return self.id
-
-    def get_source_node_name(self) -> str:
-        """
-        Gets source node name.
-
-        Returns:
-             Source node name
-        """
-        return self.source_node_name
-
-    def get_dest_node_name(self) -> str:
-        """
-        Gets destination node name.
-
-        Returns:
-             Destination node name
-        """
-        return self.dest_node_name
 
     def get_bandwidth(self) -> int:
         """

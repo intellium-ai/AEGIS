@@ -2,11 +2,13 @@
 """Defines node behaviour for Green PoL."""
 from typing import TYPE_CHECKING, Union
 
+from primaite.common.custom_typing import Serializable
+
 if TYPE_CHECKING:
     from primaite.common.enums import FileSystemState, HardwareState, NodePOLType, SoftwareState
 
 
-class NodeStateInstructionGreen(object):
+class NodeStateInstructionGreen(Serializable):
     """The Node State Instruction class."""
 
     def __init__(
@@ -15,7 +17,7 @@ class NodeStateInstructionGreen(object):
         _start_step: int,
         _end_step: int,
         _node_id: str,
-        _node_pol_type: "NodePOLType",
+        _node_pol_type: NodePOLType,
         _service_name: str,
         _state: Union["HardwareState", "SoftwareState", "FileSystemState"],
     ) -> None:
@@ -38,6 +40,19 @@ class NodeStateInstructionGreen(object):
         self.service_name: str = _service_name  # Not used when not a service instruction
         # TODO: confirm type of state
         self.state: Union["HardwareState", "SoftwareState", "FileSystemState"] = _state
+
+    def serialize(self):
+        state_dict = {
+            "item_type": "GREEN_POL",
+            "id": self.id,
+            "start_step": self.start_step,
+            "end_step": self.end_step,
+            "nodeId": self.node_id,
+            "type": self.node_pol_type.name,
+            "protocol": self.service_name,
+            "state": self.state.name,
+        }
+        return state_dict
 
     def get_start_step(self) -> int:
         """

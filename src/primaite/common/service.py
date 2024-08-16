@@ -1,10 +1,11 @@
 # © Crown-owned copyright 2023, Defence Science and Technology Laboratory UK
 """The Service class."""
 
+from primaite.common.custom_typing import Serializable
 from primaite.common.enums import SoftwareState
 
 
-class Service(object):
+class Service(Serializable):
     """Service class."""
 
     def __init__(self, name: str, port: str, software_state: SoftwareState) -> None:
@@ -26,3 +27,6 @@ class Service(object):
         if self.patching_count <= 0:
             self.patching_count = 0
             self.software_state = SoftwareState.GOOD
+
+    def serialize(self):
+        return {"name": self.name, "port": self.port, "state": self.software_state.name}

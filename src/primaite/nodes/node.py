@@ -43,7 +43,7 @@ class Node(Serializable):
         """Returns the name of the node."""
         return self.name
 
-    def serialize(self) -> dict:
+    def serialize(self):
         """
         - item_type: NODE
             node_id: '2'
@@ -60,15 +60,16 @@ class Node(Serializable):
                 port: '80'
                 state: GOOD
         """
-        ...
-        # state_dict = {}
-        # for k, v in self.__dict__.items():
-        #     if not isinstance(v, list):
-        #         state_dict[k] = v
-        #     else:
-        #         state_dict[k] = [s.dict() for s in v]
+        state_dict = {}
+        state_dict["item_type"] = "NODE"
+        state_dict["node_id"] = self.node_id
+        state_dict["name"] = self.name
+        state_dict["node_class"] = "NONE"
+        state_dict["node_type"] = self.node_type.name
+        state_dict["priority"] = self.priority.name
+        state_dict["hardware_state"] = self.hardware_state.name
 
-        # return state_dict
+        return state_dict
 
     def turn_on(self) -> None:
         """Sets the node state to ON."""
