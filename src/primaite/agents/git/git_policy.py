@@ -1,15 +1,14 @@
+import logging
+from typing import Dict, List, Tuple
+
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge
 from torch.optim import Adam
-from transformers import BertModel, BertTokenizer, BitsAndBytesConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from torch_geometric.nn import GATConv, global_add_pool, JumpingKnowledge, LayerNorm
+from transformers import AutoModelForCausalLM, AutoTokenizer, BertModel, BertTokenizer, BitsAndBytesConfig
 from transformers.models.llama.modeling_llama import LlamaForCausalLM
-from typing import List, Tuple, Dict
-import numpy as np
-import logging
-
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -224,9 +223,9 @@ class LLM(torch.nn.Module):
 class GITPolicy(nn.Module):
     def __init__(
         self,
-        action_space: int = None,
-        state_space: int = None,
-        hidden_dim: int = None,
+        action_space: int | None = None,
+        state_space: int | None = None,
+        hidden_dim: int | None = None,
         ge_learning_rate: float = 0.0001,
         llm_device: str = "cuda:0",
         ap_device: str = "cuda:1",
@@ -324,4 +323,4 @@ class GITPolicy(nn.Module):
         mean_reward = np.mean([rew[0] for rew in self.roll_out])
         self.roll_out = []
 
-        return loss.cpu().detach().numpy(), mean_reward
+        return loss.cpu().detach().numpy(), float(mean_reward)

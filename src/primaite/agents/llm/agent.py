@@ -1,29 +1,33 @@
+from __future__ import annotations
+
 import json
+from dataclasses import dataclass
 from logging import Logger
 from pathlib import Path
-from typing import Any, Literal, Optional, Type, TypeVar, Dict, List, Tuple
-from termcolor import colored
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type, TypeVar
+
 import numpy as np
+from outlines.fsm.json_schema import build_regex_from_schema
 from pydantic import BaseModel
+from termcolor import colored
 from text_generation import Client
 from text_generation.types import Grammar, GrammarType
+
 from primaite import getLogger
 from primaite.action import NodeAction
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.llm.utils import network_connectivity_desc, obs_diff, obs_view_full, get_obs_act_history_str
+from primaite.agents.llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
+from primaite.agents.llm.prompting import (
+    ACTION_INFO,
+    AgentNodeAction,
+    AgentReasoningNodeSelection,
+    NODE_ACTION_SELECTION,
+    REASON_ACTION_SPACE_NODE_SELECT,
+    SYSTEM_MSG,
+)
 from primaite.common.enums import AgentFramework, AgentIdentifier
-from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.exceptions import LLMGrammarError
-from outlines.fsm.json_schema import build_regex_from_schema
-from primaite.agents.llm.prompting import (
-    SYSTEM_MSG,
-    REASON_ACTION_SPACE_NODE_SELECT,
-    NODE_ACTION_SELECTION,
-    ACTION_INFO,
-    AgentReasoningNodeSelection,
-    AgentNodeAction,
-)
 
 _LOGGER: Logger = getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
@@ -99,31 +103,29 @@ class LLM:
 
         return response_model
 
-    def _build_reasoning_prompt(self, env_state: EnvironmentState, env_history: list[EnvironmentState]) -> str:
+    def _build_reasoning_prompt(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
         prompt = ""
 
         # Get the action space description
-        env = env_state.env
-        initial_state = env_history[0]
+        initial_state = obs_history[0]
+        network = initial_state.network
 
-        node_names = "'" + ", ".join([n.name for n in env.active_nodes]) + "'"  # Nice comma separated list
-        service_names = "'" + ", ".join(env.services_list) + "'"
+        node_names = "'" + ", ".join([n.name for n in network.active_nodes]) + "'"  # Nice comma separated list
+        service_names = "'" + ", ".join(network.service_names) + "'"
 
-        obs_act_history = get_obs_act_history_str(
-            env_history=env_history, env=env_state.env, max_history=MAX_PROMPT_OBS_HISTORY
-        )
+        obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
 
         # Current observation space changes
-        _LOGGER.info(f"{colored('Observed changes', 'yellow')}: {obs_diff(env_state)}\n\n")
+        _LOGGER.info(f"{colored('Observed changes', 'yellow')}: {obs_state.changes_str}\n\n")
 
         prompt = REASON_ACTION_SPACE_NODE_SELECT.format(
             node_names=node_names,
             service_names=service_names,
-            network_connectivity_desc=network_connectivity_desc(initial_state),
-            initial_obs_view_full=obs_view_full(initial_state),
+            network_connectivity_desc=network_connectivity_desc(network),
+            initial_obs_view_full=initial_state.format(),
             obs_act_history=obs_act_history,
-            current_obs_view_full=obs_view_full(env_state),
-            current_obs_diff=obs_diff(env_state),
+            current_obs_view_full=obs_state.format(),
+            current_obs_diff=obs_state.changes_str,
             action_info=ACTION_INFO.format(service_names=service_names),
         )
         messages: List[Tuple[Literal["user", "assistant"], str]] = [("user", prompt)]
@@ -132,27 +134,25 @@ class LLM:
         return prompt
 
     def _build_action_prompt(
-        self, env_state: EnvironmentState, env_history: list[EnvironmentState], node_name: str, reasoning: str
+        self, obs_state: ObservedState, obs_history: list[ObservedState], node_name: str, reasoning: str
     ) -> str:
         prompt = ""
 
         # Get the action space description
-        env = env_state.env
-        initial_state = env_history[0]
-        service_names = "'" + ", ".join(env.services_list) + "'"
+        initial_state = obs_history[0]
+        network = initial_state.network
+        service_names = "'" + ", ".join(network.service_names) + "'"
 
-        obs_act_history = get_obs_act_history_str(
-            env_history=env_history, env=env_state.env, max_history=MAX_PROMPT_OBS_HISTORY
-        )
+        obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
 
         prompt = NODE_ACTION_SELECTION.format(
             node_name=node_name,
             reasoning=reasoning,
-            network_connectivity_desc=network_connectivity_desc(initial_state),
-            initial_obs_view_full=obs_view_full(initial_state),
+            network_connectivity_desc=network_connectivity_desc(network),
+            initial_obs_view_full=initial_state.format(),
             obs_act_history=obs_act_history,
-            current_obs_view_full=obs_view_full(env_state),
-            current_obs_diff=obs_diff(env_state),
+            current_obs_view_full=obs_state.format(),
+            current_obs_diff=obs_state.changes_str,
             action_info=ACTION_INFO.format(service_names=service_names),
         )
         messages = [("user", prompt)]
@@ -161,16 +161,16 @@ class LLM:
 
         return prompt
 
-    def predict(self, env_state: EnvironmentState, env_history: list[EnvironmentState]) -> Tuple[int, str, str]:
-        env = env_state.env
+    def predict(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> Tuple[int, str, str]:
 
         # Think and decide which node to act on
-        prompt = self._build_reasoning_prompt(env_state=env_state, env_history=env_history)
+        prompt = self._build_reasoning_prompt(obs_state=obs_state, obs_history=obs_history)
+        network = obs_state.network
         agent_reason_select = self.generate_model(
             prompt=prompt,
             model=AgentReasoningNodeSelection,
             repetition_penalty=1.1,
-            new_literals={"node_name": [n.name for n in env.active_nodes] + ["NONE"]},
+            new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
         )
         reasoning = agent_reason_select.reasoning
         node_selection = agent_reason_select.node_name
@@ -179,29 +179,35 @@ class LLM:
         if node_selection != "NONE":
             # BUILD PROMPT HERE
             prompt = self._build_action_prompt(
-                env_state=env_state, env_history=env_history, reasoning=reasoning, node_name=node_selection
+                obs_state=obs_state, obs_history=obs_history, reasoning=reasoning, node_name=node_selection
             )
             agent_action = self.generate_model(
                 prompt=prompt,
                 model=AgentNodeAction,
                 repetition_penalty=1.1,
-                new_literals={"node_name": [n.name for n in env.active_nodes] + ["NONE"]},
+                new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
             )
             try:
-                action = agent_action.to_node_action(env=env)
+                action = agent_action.to_node_action(network=network)
             except BaseException:
                 _LOGGER.info(f"Invalid LLM action: {agent_action}")
-                action = NodeAction(env=env)
+                action = NodeAction(network=network)
 
         # When the LLM chose to take no action
         else:
-            action = NodeAction(env=env)
+            action = NodeAction(network=network)
 
         action_id = action.action_id
         return action_id, prompt, reasoning
 
 
 class LLMAgent(AgentSessionABC):
+
+    @dataclass
+    class ActionInfo(AgentSessionABC.ActionInfo):
+        prompt: str
+        reasoning: str
+
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
@@ -223,7 +229,7 @@ class LLMAgent(AgentSessionABC):
         self._agent = LLM(base_url="http://192.168.0.148:58084", timeout=120)
 
         # Keep track of env history
-        self.env_history = [EnvironmentState(self._env)]
+        self.obs_history = [ObservedState.from_env(self._env)]
 
     def _save_checkpoint(self) -> None:
         _LOGGER.warning("Deterministic agents cannot learn")
@@ -232,19 +238,21 @@ class LLMAgent(AgentSessionABC):
         _LOGGER.warning("Deterministic agents cannot learn")
 
     def _calculate_action(self, obs: np.ndarray):
-        action, prompt, reasoning = self._calculate_action_info(obs)
+        action, _ = self.calculate_action_info(obs)
 
         return action
 
-    def _calculate_action_info(self, obs: np.ndarray) -> tuple[int, str | None, str | None]:
-        prev_env_state = self.env_history[-1]
-        env_state = EnvironmentState(self._env, prev_env_state=prev_env_state)
+    def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]:
+        prev_obs_state = self.obs_history[-1]
+        curr_obs_state = ObservedState.from_env(self._env, prev_obs_state)
 
-        action, prompt, reasoning = self._agent.predict(env_state, self.env_history)
-        env_state.action_id = action
-        self.env_history.append(env_state)
+        action_id, prompt, reasoning = self._agent.predict(curr_obs_state, self.obs_history)
+        curr_obs_state.action = NodeAction.from_id(network=curr_obs_state.network, action_id=action_id)
+        self.obs_history.append(curr_obs_state)
 
-        return action, prompt, reasoning
+        info = LLMAgent.ActionInfo(prompt=prompt, reasoning=reasoning)
+
+        return action_id, info
 
     def evaluate(
         self,

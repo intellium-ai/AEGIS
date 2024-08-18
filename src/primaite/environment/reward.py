@@ -4,9 +4,9 @@ from logging import Logger
 from typing import Dict, TYPE_CHECKING, Union
 
 from primaite import getLogger
-from primaite.common.custom_typing import NodeUnion
 from primaite.common.enums import FileSystemState, HardwareState, SoftwareState
 from primaite.common.service import Service
+from primaite.nodes import NodeUnion
 from primaite.nodes.active_node import ActiveNode
 from primaite.nodes.service_node import ServiceNode
 

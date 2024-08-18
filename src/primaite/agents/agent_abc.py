@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime
 from logging import Logger
 from pathlib import Path
@@ -47,6 +48,9 @@ class AgentSessionABC(ABC):
     This class cannot be directly instantiated and must be inherited from with all implemented abstract methods
     implemented.
     """
+
+    @dataclass
+    class ActionInfo: ...
 
     @abstractmethod
     def __init__(
@@ -230,8 +234,8 @@ class AgentSessionABC(ABC):
     def _calculate_action(self, obs: np.ndarray) -> int:
         pass
 
-    def _calculate_action_info(self, obs: np.ndarray) -> tuple[int, str | None, str | None]:
-        return self._calculate_action(obs), None, None
+    def calculate_action_info(self, obs: np.ndarray) -> tuple[int, AgentSessionABC.ActionInfo]:
+        return self._calculate_action(obs), AgentSessionABC.ActionInfo()
 
     @abstractmethod
     def learn(

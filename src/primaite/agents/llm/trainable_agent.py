@@ -1,36 +1,26 @@
 from collections import defaultdict
+from dataclasses import dataclass
 from logging import Logger
 from pathlib import Path
 from typing import Any, List, Literal, Tuple, TypeVar
 
-import numpy as np
-import torch
-import regex
-import wandb
 import networkx as nx
+import numpy as np
+import regex
+import torch
+import wandb
+from peft.tuners.lora import LoraConfig
 from pydantic import BaseModel
 from termcolor import colored
 from transformers import AutoTokenizer, BitsAndBytesConfig, GenerationConfig
-from peft.tuners.lora import LoraConfig
-from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
-from termcolor import colored
+from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
+
 from primaite import getLogger
 from primaite.action import NodeAction
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.llm.prompting import (
-    ACTION_INFO,
-    ACTION_SELECTION,
-    REASON_ACTION_SPACE_NODE_SELECT,
-    SYSTEM_MSG,
-)
-from primaite.agents.llm.utils import (
-    get_obs_act_history_str,
-    network_connectivity_desc,
-    obs_diff,
-    obs_view_full,
-)
+from primaite.agents.llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
+from primaite.agents.llm.prompting import ACTION_INFO, ACTION_SELECTION, REASON_ACTION_SPACE_NODE_SELECT, SYSTEM_MSG
 from primaite.common.enums import AgentFramework, AgentIdentifier
-from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 
 _LOGGER: Logger = getLogger(__name__)
@@ -103,28 +93,22 @@ class TrainableLLM:
         response = self.tokenizer.decode(gen_tokens[0][: len(tokens)])
         return response
 
-    def _build_action_prompt(
-        self,
-        env_state: EnvironmentState,
-        env_history: list[EnvironmentState],
-    ) -> str:
+    def _build_action_prompt(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
         prompt = ""
 
         # Get the action space description
-        env = env_state.env
-        initial_state = env_history[0]
-        service_names = "'" + ", ".join(env.services_list) + "'"
+        initial_state = obs_history[0]
+        network = initial_state.network
+        service_names = "'" + ", ".join(network.service_names) + "'"
 
-        obs_act_history = get_obs_act_history_str(
-            env_history=env_history, env=env_state.env, max_history=MAX_PROMPT_OBS_HISTORY
-        )
+        obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
 
         prompt = ACTION_SELECTION.format(
-            network_connectivity_desc=network_connectivity_desc(initial_state),
-            initial_obs_view_full=obs_view_full(initial_state),
+            network_connectivity_desc=network_connectivity_desc(network),
+            initial_obs_view_full=initial_state.format(),
             obs_act_history=obs_act_history,
-            current_obs_view_full=obs_view_full(env_state),
-            current_obs_diff=obs_diff(env_state),
+            current_obs_view_full=obs_state.format(),
+            current_obs_diff=obs_state.changes_str,
             action_info=ACTION_INFO.format(service_names=service_names),
         )
 
@@ -134,19 +118,25 @@ class TrainableLLM:
 
         return prompt
 
-    def predict(self, env_state: EnvironmentState, env_history: list[EnvironmentState]) -> Tuple[int, str, str]:
+    def predict(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> Tuple[int, str]:
 
         # Think and decide which node to act on
-        prompt = self._build_action_prompt(env_state=env_state, env_history=env_history)
+        prompt = self._build_action_prompt(obs_state=obs_state, obs_history=obs_history)
 
         response = self.generate(prompt=prompt)
         digits = regex.findall(r"\d+", response)
 
         action = int(digits[-1]) if digits else 0
-        return action, prompt, "reason"
+
+        return action, prompt
 
 
 class TrainableLLMAgent(AgentSessionABC):
+
+    @dataclass
+    class ActionInfo(AgentSessionABC.ActionInfo):
+        prompt: str
+
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
@@ -171,7 +161,7 @@ class TrainableLLMAgent(AgentSessionABC):
         print(adj)
 
         # Keep track of env history
-        self.env_history = [EnvironmentState(self._env)]
+        self.obs_history = [ObservedState.from_env(self._env)]
 
     def _save_checkpoint(self) -> None:
         _LOGGER.warning(colored("Saving not implemented yet", color="light_red"))
@@ -199,7 +189,7 @@ class TrainableLLMAgent(AgentSessionABC):
             reward_list = []
             while steps < time_steps and not done:
 
-                action, prompt = self._calculate_action(obs)
+                action = self._calculate_action(obs)  # type: ignore
 
                 assert isinstance(action, int)
 
@@ -214,7 +204,7 @@ class TrainableLLMAgent(AgentSessionABC):
                 rewards = torch.tensor(rewards, device="cuda:0").view(1, -1)
 
                 # Now call the step function
-                stats = self._agent.ppo_trainer.step([obs.to("cuda:0")], action, rewards)
+                stats = self._agent.ppo_trainer.step([obs.to("cuda:0")], action, rewards)  # type: ignore
 
                 steps += 1
                 episode_reward += rewards
@@ -231,19 +221,21 @@ class TrainableLLMAgent(AgentSessionABC):
         self._plot_av_reward_per_episode(learning_session=True)
 
     def _calculate_action(self, obs: np.ndarray):
-        action, prompt, reasoning = self._calculate_action_info(obs)
+        action, _ = self.calculate_action_info(obs)
 
-        return action, prompt
+        return action
 
-    def _calculate_action_info(self, obs: np.ndarray) -> tuple[int, str | None, str | None]:
-        prev_env_state = self.env_history[-1]
-        env_state = EnvironmentState(self._env, prev_env_state=prev_env_state)
+    def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]:
+        prev_obs_state = self.obs_history[-1]
+        curr_obs_state = ObservedState.from_env(self._env, prev_obs_state)
 
-        action, prompt, reasoning = self._agent.predict(env_state, self.env_history)
-        env_state.action_id = action
-        self.env_history.append(env_state)
+        action_id, prompt = self._agent.predict(curr_obs_state, self.obs_history)
+        curr_obs_state.action = NodeAction.from_id(network=curr_obs_state.network, action_id=action_id)
+        self.obs_history.append(curr_obs_state)
 
-        return action, prompt, None
+        info = TrainableLLMAgent.ActionInfo(prompt=prompt)
+
+        return action_id, info
 
     def evaluate(
         self,
@@ -266,7 +258,7 @@ class TrainableLLMAgent(AgentSessionABC):
             done, steps, rew = False, 0, 0
             while steps < time_steps and not done:
 
-                action, _ = self._calculate_action(obs)
+                action = self._calculate_action(obs)
 
                 assert isinstance(action, int)
 

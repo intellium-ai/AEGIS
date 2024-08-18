@@ -13,8 +13,8 @@ from primaite.agents.utils import (
     get_node_of_ip,
     transform_action_acl_enum,
 )
-from primaite.common.custom_typing import NodeUnion
 from primaite.common.enums import HardCodedAgentView, RulePermissionType
+from primaite.nodes import NodeUnion
 from primaite.nodes.active_node import ActiveNode
 from primaite.nodes.service_node import ServiceNode
 from primaite.pol.ier import IER

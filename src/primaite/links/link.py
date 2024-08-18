@@ -15,7 +15,9 @@ class Link(Serializable):
         _id: str,
         _bandwidth: int,
         _source_node_id: str,
+        _source_node_name: str,
         _dest_node_id: str,
+        _dest_node_name: str,
         _services: List[str],
     ) -> None:
         """
@@ -31,7 +33,9 @@ class Link(Serializable):
         self.id: str = _id
         self.bandwidth: int = _bandwidth
         self.source_node_id: str = _source_node_id
+        self.source_node_name: str = _source_node_name
         self.dest_node_id: str = _dest_node_id
+        self.dest_node_name: str = _dest_node_name
         self.protocol_list: List[Protocol] = []
 
         # Add the default protocols

@@ -3,11 +3,12 @@
 from typing import Dict
 
 from networkx import MultiGraph, shortest_path
+
 from primaite import getLogger
 from primaite.acl.access_control_list import AccessControlList
-from primaite.common.custom_typing import NodeUnion
 from primaite.common.enums import HardwareState, NodePOLInitiator, NodePOLType, NodeType, SoftwareState
 from primaite.links.link import Link
+from primaite.nodes import NodeUnion
 from primaite.nodes.active_node import ActiveNode
 from primaite.nodes.node_state_instruction_red import NodeStateInstructionRed
 from primaite.nodes.service_node import ServiceNode

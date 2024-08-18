@@ -1,16 +1,17 @@
 from logging import Logger
 from pathlib import Path
 from typing import Any
+
+import matplotlib.pyplot as plt
 import torch
 from torch.distributions import Categorical
+
 from primaite import getLogger
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.common.enums import AgentFramework, AgentIdentifier
-from primaite.environment.env_state import EnvironmentState
-from primaite.environment.primaite_env import Primaite
-from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.agents.gnn.gnn_policy import GNNPolicy
-import matplotlib.pyplot as plt
+from primaite.agents.utils import from_networkx, prepare_graph
+from primaite.common.enums import AgentFramework, AgentIdentifier
+from primaite.environment.primaite_env import Primaite
 
 _LOGGER: Logger = getLogger(__name__)
 
@@ -44,7 +45,6 @@ class GNNAgent(AgentSessionABC):
         print(self._agent)
 
         # Keep track of env history
-        self.env_history = [EnvironmentState(self._env)]
         super()._setup()
 
         self._can_learn = True

@@ -16,8 +16,7 @@ from torch_geometric.utils import from_networkx
 
 from primaite import getLogger
 from primaite.acl.access_control_list import AccessControlList
-from primaite.agents.utils import is_valid_acl_action_extra, is_valid_node_action
-from primaite.common.custom_typing import NodeUnion
+from primaite.common.action_utils import create_node_action_dict, is_valid_acl_action_extra, is_valid_node_action
 from primaite.common.enums import (
     ActionType,
     AgentFramework,
@@ -28,6 +27,7 @@ from primaite.common.enums import (
     NodePOLInitiator,
     NodePOLType,
     NodeType,
+    Priority,
     RulePermissionType,
     SessionType,
     SoftwareState,
@@ -39,6 +39,7 @@ from primaite.config.training_config import TrainingConfig
 from primaite.environment.observations import ObservationsHandler
 from primaite.environment.reward import calculate_reward_function
 from primaite.links.link import Link
+from primaite.nodes import NodeUnion
 from primaite.nodes.active_node import ActiveNode
 from primaite.nodes.node import Node
 from primaite.nodes.node_state_instruction_green import NodeStateInstructionGreen
@@ -871,7 +872,9 @@ class Primaite(Env):
             link_id,
             link_bandwidth,
             source_node.node_id,
+            source_node.name,
             dest_node.node_id,
+            dest_node.name,
             self.services_list,
         )
 
@@ -888,7 +891,9 @@ class Primaite(Env):
             link_id,
             link_bandwidth,
             source_node_ref.node_id,
+            source_node_ref.name,
             dest_node_ref.node_id,
+            dest_node_ref.name,
             self.services_list,
         )
 
@@ -1208,23 +1213,7 @@ class Primaite(Env):
         # [0, 3] - action on property (0 = nothing, On / Scan, Off / Repair, Reset / Patch / Restore) # noqa
         # [0, num services] - resolves to service ID (0 = nothing, resolves to service) # noqa
         # reserve 0 action to be a nothing action
-        actions = {0: [0, 0, 0, 0]}
-        action_key = 1
-        for node in range(1, self.num_nodes + 1):
-            # 4 node properties (NONE, OPERATING, OS, SERVICE, FILE_SYSTEM)
-            for node_property in range(5):
-                # Node Actions either:
-                # (NONE, ON, OFF, RESET) - operating state OR (NONE, PATCH) - OS/service state
-                # Use MAX to ensure we get them all
-                for node_action in range(4):
-                    for service_state in range(self.num_services):
-                        action = [node, node_property, node_action, service_state]
-                        # check to see if it's a nothing action (has no effect)
-                        if is_valid_node_action(action):
-                            actions[action_key] = action
-                            action_key += 1
-
-        return actions
+        return create_node_action_dict(self.num_nodes, self.num_services)
 
     def create_acl_action_dict(self) -> Dict[int, List[int]]:
         """Creates a dictionary mapping each possible discrete action to more readable multidiscrete action."""

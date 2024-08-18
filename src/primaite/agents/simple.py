@@ -15,11 +15,11 @@ class RandomAgent(HardCodedAgentSessionABC):
 
     def _calculate_action(self, obs: np.ndarray) -> int:
         return self._env.action_space.sample()
-    
+
 
 class PickACardAnyCardAgent(HardCodedAgentSessionABC):
-    """
-    """
+    """ """
+
     def _calculate_action(self, obs: np.ndarray) -> int:
         return np.random.randint(0, 12) + 1
 

@@ -1,22 +1,25 @@
+import logging
+from dataclasses import dataclass
 from logging import Logger
 from pathlib import Path
 from typing import Any, Tuple
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 from torch.distributions import Categorical
+
 from primaite import getLogger
-from primaite.agents.agent_abc import AgentSessionABC
-from primaite.common.enums import AgentFramework, AgentIdentifier
-from primaite.environment.env_state import EnvironmentState
-from primaite.environment.primaite_env import Primaite
-from primaite.agents.utils import from_networkx, prepare_graph
-from primaite.agents.git.git_policy import GITPolicy
 from primaite.action import NodeAction
+from primaite.agents.agent_abc import AgentSessionABC
+from primaite.agents.git.git_policy import GITPolicy
 from primaite.agents.git.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
-from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
-from primaite.environment import EnvironmentState
-import matplotlib.pyplot as plt
+from primaite.agents.llm.observation import get_obs_act_history_str, ObservedState
 from primaite.agents.llm.prompting import AgentNodeAction
-import logging
+from primaite.agents.utils import from_networkx, prepare_graph
+from primaite.common.enums import AgentFramework, AgentIdentifier
+from primaite.environment.primaite_env import Primaite
+from primaite.network import Network
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -24,6 +27,10 @@ device = "cuda:0"
 
 
 class GITAgent(AgentSessionABC):
+
+    @dataclass
+    class ActionInfo(AgentSessionABC.ActionInfo): ...
+
     def __init__(self, training_config_path, lay_down_config_path):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
@@ -59,7 +66,7 @@ class GITAgent(AgentSessionABC):
         logging.info(self._agent)
 
         # Keep track of env history
-        self.env_history = [EnvironmentState(self._env)]
+        self.obs_history = [ObservedState.from_env(self._env)]
         super()._setup()
 
         self._can_learn = True
@@ -86,17 +93,19 @@ class GITAgent(AgentSessionABC):
         # try:
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
         action = self.get_node_action(text_output=llm_action_text)
-        action = action.to_node_action(env=self._env).action_id
+        action = action.to_node_action(network=self.obs_history[0].network).action_id
         # except:
         #     action = 0
         #     logging.warning('An invalid action id was produced, falling back to 0')
 
         return action, probs
 
+    def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]: ...
+
     def _build_prompt(self) -> Tuple[str, str]:
 
         # Make the service name just TCP or UDP etc, then find the mapping between nodes and what service they have.
-        nodes_table = self.env_history[0].nodes_table.rename(
+        nodes_table = self.obs_history[0].nodes_table.rename(
             columns={"TCP Service State": "TCP", "TCP_SQL Service State": "TCP_SQL", "UDP Service State": "UDP"}
         )
         node_services = {}
@@ -118,11 +127,14 @@ class GITAgent(AgentSessionABC):
             f"{key}: {', '.join(str(val) for val in value) if value else 'NONE'}"
             for key, value in node_services.items()
         )
-        obs_act_history_str = get_obs_act_history_str(self.env_history, env=self._env)
+        obs_act_history_str = get_obs_act_history_str(self.obs_history)
 
         if not obs_act_history_str:
             obs_act_history_str = "No observation history yet..."
-        obs_diff_str = obs_diff(EnvironmentState(env=self._env))
+
+        curr_state = ObservedState.from_env(env=self._env, prev_obs_state=self.obs_history[-1])
+
+        obs_diff_str = curr_state.changes_str
 
         # Build and return prompts
         reasoning_prompt = LLM_REASONING_PROMPT.format(

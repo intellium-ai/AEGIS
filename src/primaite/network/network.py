@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import cached_property
@@ -6,16 +8,17 @@ import matplotlib.pyplot as plt
 import networkx as nx
 import pandas as pd
 
-from primaite.common.custom_typing import NodeUnion, Serializable
+from primaite.common.custom_typing import Serializable
 from primaite.common.enums import SoftwareState
-from primaite.common.service import Service
 from primaite.environment.primaite_env import Primaite
 from primaite.links import Link
-from primaite.nodes import ActiveNode, Node, ServiceNode
+from primaite.nodes import ActiveNode, Node, NodeUnion, ServiceNode
 
 
 @dataclass
 class Network(Serializable):
+    """A network frozen in a particular state"""
+
     nodes_dict: dict[str, NodeUnion]
     links_dict: dict[str, Link]
     service_names: list[str]
@@ -48,8 +51,7 @@ class Network(Serializable):
     def links(self) -> list[Link]:
         return list(self.links_dict.values())
 
-    @cached_property
-    def nodes_table(self) -> pd.DataFrame:
+    def nodes_table(self, limited_view=False) -> pd.DataFrame:
         nodes = self.active_nodes
 
         nodes_dict = {
@@ -58,7 +60,9 @@ class Network(Serializable):
             # "IP": [n.ip_address for n in nodes],
             "Hardware State": [n.hardware_state.name for n in nodes],
             "Software State": [n.software_state.name for n in nodes],
-            "File System State": [n.file_system_state_observed.name for n in nodes],
+            "File System State": [
+                n.file_system_state_observed.name if limited_view else n.file_system_state_actual.name for n in nodes
+            ],
         }
 
         services_dict = {
@@ -76,7 +80,6 @@ class Network(Serializable):
 
         return nodes_table
 
-    @cached_property
     def traffic_table(self) -> pd.DataFrame:
 
         indices = [int(link.id) for link in self.links]
@@ -104,7 +107,7 @@ class Network(Serializable):
         node_color_map = []
         for G_node in G:
             node_id = G_node.node_id
-            node = self.nodes[node_id]
+            node = self.nodes_dict[node_id]
             if node.is_working():
                 node_color_map.append("tab:blue")
             else:
@@ -115,7 +118,7 @@ class Network(Serializable):
         edge_color_map = []
         for src, dest, data in G.edges(data=True):
             link_id = data["id"]
-            link = self.links[link_id]
+            link = self.links_dict[link_id]
             traffic_level = link.get_traffic_level()
             edge_color_map.append(traffic_level)
 
@@ -142,6 +145,45 @@ class Network(Serializable):
         nx.draw_networkx_edge_labels(G, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
 
         return fig
+
+    def diff(self, prev: Network, limited_view=False, colors=True) -> list[str]:
+        diff = []
+        curr = self
+        # Nodes
+
+        curr_nodes_table = curr.nodes_table(limited_view=limited_view)
+        prev_nodes_table = prev.nodes_table(limited_view=limited_view)
+        compare_nodes = prev_nodes_table.compare(curr_nodes_table, result_names=("prev", "curr"), align_axis=0)
+        for state_name in compare_nodes:
+            for id, s in compare_nodes[state_name].groupby(level=0):
+                node_name = curr_nodes_table.at[id, "Name"]
+                prev_state = s.iloc[0]
+                curr_state = s.iloc[1]
+                if colors:
+                    node_change_str = f"Node :blue[{node_name}]'s :violet[{state_name}] changed from :red[{prev_state}] to :red[{curr_state}]."
+                else:
+                    node_change_str = f"Node {node_name}'s {state_name} changed from {prev_state} to {curr_state}."
+                diff.append(node_change_str)
+
+        # Links
+        compare_traffic = prev.traffic_table().compare(
+            curr.traffic_table(), result_names=("prev", "curr"), align_axis=0
+        )
+        for service_name in compare_traffic:
+            for id, s in compare_traffic[service_name].groupby(level=0):
+                link_name = curr.traffic_table().at[id, "Name"]
+                prev_traffic = s.iloc[0]
+                curr_traffic = s.iloc[1]
+                traffic_diff = int(curr_traffic - prev_traffic)
+                if colors:
+                    link_change_str = (
+                        f":violet[{service_name}] in link :green[{link_name}] changed by :red[{traffic_diff}]."
+                    )
+                else:
+                    link_change_str = f"{service_name} in link {link_name} changed by {traffic_diff}."
+                diff.append(link_change_str)
+
+        return diff
 
     def serialize(self):
         ports = {"item_type": "PORTS", "ports_list": [{"port": f"{port}"} for port in self.ports_list]}

@@ -1,12 +1,9 @@
 # © Crown-owned copyright 2023, Defence Science and Technology Laboratory UK
 """Defines node behaviour for Green PoL."""
-from typing import Any, TYPE_CHECKING, Union
+from typing import Union
 
 from primaite.common.custom_typing import Serializable
-from primaite.common.enums import NodePOLType
-
-if TYPE_CHECKING:
-    from primaite.common.enums import FileSystemState, HardwareState, NodePOLInitiator, SoftwareState
+from primaite.common.enums import FileSystemState, HardwareState, NodePOLInitiator, NodePOLType, SoftwareState
 
 
 class NodeStateInstructionRed(Serializable):
