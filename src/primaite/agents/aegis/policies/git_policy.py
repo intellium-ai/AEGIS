@@ -44,7 +44,7 @@ class GITPolicy(nn.Module):
 
         # For tracking episode rewards and probs
         self.roll_out = []
-        self.ge_optimizer = Adam(self.ge.parameters(), lr=ge_learning_rate)
+        self.optimizer = Adam(self.parameters(), lr=ge_learning_rate)
 
     def put_data(self, data):
         self.roll_out.append(data)
@@ -91,21 +91,34 @@ class GITPolicy(nn.Module):
 
         G = np.array(G)
         G_mean = G.mean()
-        G_std = G.std()
+        G_std = G.std() + 1e-8 # add small episilon to avoid div by 0
 
         # Reset gradients
-        self.ge_optimizer.zero_grad()
+        self.optimizer.zero_grad()
 
         # Calculate loss for the episode and do backprop
+        total_loss = 0
         for r, prob in self.roll_out[::-1]:
             R = r + gamma * R
-            loss = -prob * ((R - G_mean) / G_std)
-            loss.backward()
+            for p in prob:
+                loss = -p * ((R - G_mean) / G_std)
+                total_loss += loss
+            
+        total_loss.backward()
+        print('Total loss:', total_loss)
+        for name, param in self.named_parameters():
+            print(f"Gradient of {name}: {param.grad}")
 
-        self.ge_optimizer.step()
+        # What are the gradients saying?
+        # Print gradients
+        # print('Total loss:', total_loss)
+        # for name, param in self.named_parameters():
+            # print(f"Gradient of {name}: {param.grad}")
+        
+        self.optimizer.step()
 
         # Get average reward and reset rollout
         mean_reward = np.mean([rew[0] for rew in self.roll_out])
         self.roll_out = []
 
-        return loss.cpu().detach().numpy(), mean_reward
+        return total_loss.cpu().detach().numpy(), mean_reward

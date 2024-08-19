@@ -1,6 +1,5 @@
 import torch
-from transformers import BitsAndBytesConfig
-from transformers import AutoTokenizer
+from transformers import BitsAndBytesConfig, AutoTokenizer
 from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
 from peft.tuners.lora import LoraConfig
 from typing import List, Tuple, Dict
@@ -127,7 +126,6 @@ class LLM(torch.nn.Module):
 
             # Get logits
             logits = next_token_embs[0][:, -1, :]
-
             # Apply restriction on the output logits (or don't)
             if restrict_output:
                 token_id, prob = self._filter_logits(
