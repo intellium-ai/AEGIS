@@ -9,7 +9,7 @@ from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
-from primaite.agents.gnn.gnn_policy import GNNPolicy
+from primaite.agents.aegis.policies.gnn_policy import GNNPolicy
 import matplotlib.pyplot as plt
 
 _LOGGER: Logger = getLogger(__name__)

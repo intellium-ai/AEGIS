@@ -9,9 +9,9 @@ from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.env_state import EnvironmentState
 from primaite.environment.primaite_env import Primaite
 from primaite.agents.utils import from_networkx, prepare_graph
-from primaite.agents.git.git_policy import GITPolicy
+from primaite.agents.aegis.policies.git_policy import GITPolicy
 from primaite.action import NodeAction
-from primaite.agents.git.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
+from primaite.agents.aegis.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
 from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
 from primaite.environment import EnvironmentState
 import matplotlib.pyplot as plt
@@ -48,11 +48,9 @@ class GITAgent(AgentSessionABC):
 
         self._agent = GITPolicy(
             state_space=6,
-            action_space=100,
             hidden_dim=128,
             n_graph_tokens=20,
             ge_learning_rate=0.0001,
-            llm_device="cuda:0",
             ge_device="cuda:0",
         )
 
