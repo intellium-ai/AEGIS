@@ -19,14 +19,12 @@ class GITPolicy(nn.Module):
         hidden_dim: int = None,
         ge_learning_rate: float = 0.0001,
         llm_device: str = "cuda:0",
-        ap_device: str = "cuda:1",
         ge_device: str = "cuda:1",
         n_graph_tokens: int = 10,
     ):
 
         super(GITPolicy, self).__init__()
         self.llm_device = llm_device
-        self.ap_device = ap_device
         self.ge_device = ge_device
 
         # space size check
@@ -65,7 +63,7 @@ class GITPolicy(nn.Module):
         concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            text_embeddings=reasoning_embs, grad=False, restrict_output=False, max_new_tokens=100
+            text_embeddings=reasoning_embs, grad=False, restrict_output=False, max_new_tokens=1
         )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
 

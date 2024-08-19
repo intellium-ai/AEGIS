@@ -30,7 +30,7 @@ agent_identifier: GIT
 # Options are:
 # True
 # False
-random_red_agent: True
+random_red_agent: False
 
 # The (integer) seed to be used in random number generation
 # Default is None (null)
@@ -40,7 +40,7 @@ seed: null
 # Options are:
 # True
 # False
-deterministic: False
+deterministic: True
 
 # Sets what view of the environment the deterministic hardcoded agent has. The default is BASIC.
 # Options are:
@@ -68,7 +68,7 @@ observation_space:
 num_train_episodes: 512
 
 # Number of time_steps for training per episode
-num_train_steps: 256
+num_train_steps: 10
 
 # Number of episodes for evaluation to run per session
 num_eval_episodes: 512
