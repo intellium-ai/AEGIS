@@ -177,3 +177,40 @@ class LLM(torch.nn.Module):
 
         prob = candidate_tokens[token_id]
         return token_id, prob
+    
+    def _generate_last_state(
+        self, 
+        texts: List[str] = None, 
+        input_ids: torch.Tensor = None, 
+        input_embeddings: torch.Tensor = None
+    ) -> torch.Tensor:
+
+        if texts is not None:
+            texts = [self.tokenizer.bos_token + text + self.tokenizer.eos_token for text in texts]
+            tokenizer_output = self.tokenizer(texts, return_tensors='pt', padding=True)
+
+            input_ids = tokenizer_output['input_ids']
+            eos_idx = torch.sum(tokenizer_output['attention_mask'], dim=1) - 1
+
+        if input_ids is not None:
+            input_embeddings = self.model.pretrained_model.get_input_embeddings()(input_ids)
+
+        hidden_layer_output = self.model(inputs_embeds=input_embeddings)[1]['hidden_states'][-1]
+
+        if texts is None:
+            eos_idx = torch.full((hidden_layer_output.shape[0], ), fill_value=-1)
+        final_embeddings = hidden_layer_output[torch.arange(hidden_layer_output.shape[0], ), eos_idx]
+
+        return final_embeddings
+
+    def generate_last_state(
+        self, 
+        grad: bool = True,
+        **kwargs
+    ) -> torch.Tensor:
+        
+        if grad:
+            return self._generate_last_state(**kwargs)
+        else:
+            with torch.no_grad():
+                return self._generate_last_state(**kwargs)
