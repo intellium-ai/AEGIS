@@ -178,7 +178,7 @@ class LLM(torch.nn.Module):
         prob = candidate_tokens[token_id]
         return token_id, prob
     
-    def generate_last_state(
+    def _generate_last_state(
         self, 
         texts: List[str] = None, 
         input_ids: torch.Tensor = None, 
@@ -193,7 +193,7 @@ class LLM(torch.nn.Module):
             eos_idx = torch.sum(tokenizer_output['attention_mask'], dim=1) - 1
 
         if input_ids is not None:
-            input_embeddings = self.model.pretrained_model.get_input_embeddings()(input_ids).requires_grad_(True)
+            input_embeddings = self.model.pretrained_model.get_input_embeddings()(input_ids)
 
         hidden_layer_output = self.model(inputs_embeds=input_embeddings)[1]['hidden_states'][-1]
 
@@ -203,4 +203,14 @@ class LLM(torch.nn.Module):
 
         return final_embeddings
 
+    def generate_last_state(
+        self, 
+        grad: bool = True,
+        **kwargs
+    ) -> torch.Tensor:
         
+        if grad:
+            return self._generate_last_state(**kwargs)
+        else:
+            with torch.no_grad():
+                return self._generate_last_state(**kwargs)
