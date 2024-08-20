@@ -93,30 +93,24 @@ class GITPolicy(nn.Module):
         G_mean = G.mean()
         G_std = G.std() + 1e-8 # add small episilon to avoid div by 0
 
-        # Reset gradients
-        self.optimizer.zero_grad()
-
+        # Check that the total reward is not 0
+        if sum(x[0] for x in self.roll_out) == 0:
+            return 0,0
+        
         # Calculate loss for the episode and do backprop
         total_loss = 0
         for r, prob in self.roll_out[::-1]:
-            R = r + gamma * R
-            for p in prob:
-                loss = -p * ((R - G_mean) / G_std)
-                total_loss += loss
-            
-        total_loss.backward()
-        print('Total loss:', total_loss)
-        for name, param in self.named_parameters():
-            print(f"Gradient of {name}: {param.grad}")
-
-        # What are the gradients saying?
-        # Print gradients
-        # print('Total loss:', total_loss)
-        # for name, param in self.named_parameters():
-            # print(f"Gradient of {name}: {param.grad}")
+                R = r + gamma * R
+                for p in prob:
+                    loss = -p * ((R - G_mean) / G_std)
+                    total_loss += loss
         
+        total_loss.backward()
         self.optimizer.step()
-
+        
+        # Reset gradients
+        self.optimizer.zero_grad()
+        
         # Get average reward and reset rollout
         mean_reward = np.mean([rew[0] for rew in self.roll_out])
         self.roll_out = []

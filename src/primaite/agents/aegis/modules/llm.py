@@ -126,6 +126,7 @@ class LLM(torch.nn.Module):
 
             # Get logits
             logits = next_token_embs[0][:, -1, :]
+
             # Apply restriction on the output logits (or don't)
             if restrict_output:
                 token_id, prob = self._filter_logits(
@@ -166,7 +167,7 @@ class LLM(torch.nn.Module):
         token_id = max(candidate_tokens, key=lambda k: candidate_tokens[k].max().item())
 
         # If the token is a '.' and the previous token was not a number, resample but exclude the '.'
-        if token_id == self.filtered_vocab["."] and prev_token_id not in self.numeric_token_ids.values():
+        if token_id == self.filtered_vocab["."] and not prev_token_id in self.numeric_token_ids.values():
             token_id = max((k for k in candidate_tokens if k != "."), key=lambda k: candidate_tokens[k].max().item())
 
         # If the sampled token is a '.' but the previous one was also a '.', resample ignoring the '.'

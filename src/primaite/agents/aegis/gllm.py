@@ -57,7 +57,7 @@ class GLLM(torch.nn.Module):
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
         
         # 2.0 - Get the combined embeddings of graph and text tokens.
-        llm_embs = self.llm.get_embeddings(prompt=gllm_prompt)
+        llm_embs = self.llm.get_embeddings(prompt=gllm_prompt, grad=False)
         concatenated_embs = torch.cat([llm_embs, graph_embs], dim=1)
         concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
 
