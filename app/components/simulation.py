@@ -22,6 +22,7 @@ class Simulation:
         init_state = EnvironmentState(env=self.env, obs=self.env.reset())
         self.history = [init_state]
 
+        # MOVE TO INIT ??
         self.num_steps = self.agent._training_config.num_eval_steps
         self.total_reward = 0
 

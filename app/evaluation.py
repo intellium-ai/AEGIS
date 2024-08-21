@@ -24,7 +24,6 @@ if "simulation" not in state:
 if "stage" not in state:
     state.stage = EvalStage.NOT_LOADED
 
-
 def init_simulation():
     if state.session_file is not None:
         session_path = session_config_root / state.session_file
@@ -41,6 +40,13 @@ def init_simulation():
         state.simulation = None
         state.stage = EvalStage.NOT_LOADED
 
+@st.dialog("Simulation Complete")
+def view_analysis_dialog():
+    st.write("Click here for a step-by-step analysis of this simulation")
+    if st.button("Analyse", type="primary"):
+        st.write("Redirecting to Analyse Page...")
+        st.switch_page("analyse.py")
+
 
 def run_simulation():
     assert isinstance(state.simulation, Simulation)
@@ -54,7 +60,6 @@ def run_simulation():
         render_state(sim.latest_state, sim.curr_step, sim.avg_reward)
 
     state.stage = EvalStage.DONE
-
 
 def selection_component():
     st.write("**Choose either:**")
@@ -121,16 +126,6 @@ with header_col_2:
         eval_button_text = "Restart Simulation" if state.stage == EvalStage.DONE else "Start Simulation"
         evaluate_button = st.button(eval_button_text, type="primary", disabled=(state.simulation is None))
 
-        # Show slider to select env state
-        if state.stage == EvalStage.DONE:
-            assert isinstance(state.simulation, Simulation)
-            curr_step = st.slider(
-                "Current step",
-                value=len(state.simulation.history) - 1,
-                min_value=0,
-                max_value=len(state.env_history) - 1,
-            )
-
 
 st.divider()
 
@@ -152,7 +147,6 @@ node_table_placeholder = table_col_1.empty()
 
 traffic_table_label_placeholder = table_col_2.empty()
 traffic_table_placeholder = table_col_2.empty()
-
 
 st.markdown(
     """
@@ -192,13 +186,21 @@ st.markdown(
         opacity: 0.5;
         margin-top: 20px;
     }
+    .centered-content {
+        display: flex;
+        width: "100%";
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-
 def render_state(env_state, step, avg_reward):
+
     # Update the network figure
     env_view.pyplot(env_state.network_figure)
 
@@ -283,21 +285,17 @@ def render_state(env_state, step, avg_reward):
         """,
         unsafe_allow_html=True,
     )
-    node_table_placeholder.table(env_state.nodes_table)
-    traffic_table_placeholder.table(env_state.traffic_table)
+    node_table_placeholder.write(env_state.nodes_table)
+    traffic_table_placeholder.write(env_state.traffic_table)
 
 
 if state.simulation is not None:
-    if evaluate_button:
+    if evaluate_button and state.stage != EvalStage.DONE:
         run_simulation()
-        st.rerun()
 
     if state.stage == EvalStage.READY:
         fig = state.simulation.latest_state.network_figure
         env_view.pyplot(fig)  # initially populate
-    elif state.stage == EvalStage.DONE:
-        env_state = state.simulation.history[curr_step]
-        render_state(env_state, curr_step, env_state.reward)
 
-logging.info(f"Simulation loaded: {state.simulation is not None}")
-logging.info(f"Simulation stage: {state.stage.name}")
+    if state.stage == EvalStage.DONE:
+        view_analysis_dialog(simulation=state.simulation)
