@@ -243,7 +243,7 @@ with st.container():
 
     # create charts
     feature_graph_col_1.write(desired_node_values) # TODO: Decide what to show for node features over time
-    feature_graph_col_2.line_chart(desired_edge_values.set_index("Step"), y=["TCP Traffic", "TCP_SQL Traffic", "UDP Traffic"])
+    feature_graph_col_2.line_chart(desired_edge_values.set_index("Step"), y=desired_edge_values.drop('Step', axis=1).columns.tolist())
 
 
 # ----------------- STEP-BY-STEP SECTION

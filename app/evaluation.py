@@ -298,4 +298,4 @@ if state.simulation is not None:
         env_view.pyplot(fig)  # initially populate
 
     if state.stage == EvalStage.DONE:
-        view_analysis_dialog(simulation=state.simulation)
+        view_analysis_dialog()
