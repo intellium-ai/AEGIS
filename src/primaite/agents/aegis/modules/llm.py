@@ -180,8 +180,7 @@ class LLM(torch.nn.Module):
                 logits = torch.max(logits, dim=-1)
                 token_ids = logits.indices.unsqueeze(1)
                 probs = logits.values.unsqueeze(1)
-                print(probs.shape)
-                print(token_ids.shape)
+
             # Check what device the output is on
             device = probs.device
 
@@ -212,7 +211,7 @@ class LLM(torch.nn.Module):
 
     def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int]) -> Tuple[int, torch.Tensor]:
         allowed_indices = []
-        # If it's the first token, force a numeric first token
+
         if prev_token_ids:
             for prev_token_id in prev_token_ids:
                 # If the previous was not a number - force one next
@@ -229,6 +228,8 @@ class LLM(torch.nn.Module):
                         [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long
                     )
                 )
+
+        # If it's the first token, force a numeric first token
         else:
             # All sequences can start with any number (0-9) but NOT a '.'
             filtered_vocab_set = set(self.numeric_token_ids.values())
@@ -240,15 +241,14 @@ class LLM(torch.nn.Module):
                     )
                 )
 
-        allowed_indices_tensor = torch.stack(allowed_indices)
-
-        filtered_logits = torch.stack([logits[i, allowed_indices_tensor[i]] for i in range(logits.shape[0])])
         token_ids = torch.empty(logits.shape[0], dtype=torch.long).to(logits.device)
         probs = torch.empty(logits.shape[0], dtype=torch.float32).to(logits.device)
 
+        # For each sequence, apply the filtering to the output logits and select the highest logit
         for i in range(logits.shape[0]):
-            max_probs, max_indices = torch.max(filtered_logits[i], dim=-1)
-            token_ids[i] = allowed_indices_tensor[i][max_indices]
+            filtered_logits = logits[i, allowed_indices[i]]
+            max_probs, max_indices = torch.max(filtered_logits, dim=-1)
+            token_ids[i] = allowed_indices[i][max_indices]
             probs[i] = max_probs
 
         return token_ids.unsqueeze(1), probs.unsqueeze(1)
