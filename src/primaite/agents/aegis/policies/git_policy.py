@@ -58,22 +58,20 @@ class GITPolicy(nn.Module):
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
 
         # 2.0 - Reason about the network (no grad) with graph tokens too
-        reasoning_embs = self.llm.get_embeddings(prompt=reasoning_prompt)
-        concatenated_embs = torch.cat([reasoning_embs.to(self.llm_device), graph_embs.to(self.llm_device)], dim=1)
-        concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
+        reasoning_embs = self.llm.get_input_embeddings(prompt=[reasoning_prompt])
+        embeddings = self.llm.format_embeddings(text_embeddings=reasoning_embs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            text_embeddings=reasoning_embs, grad=False, restrict_output=False, max_new_tokens=1
+            text_embeddings=embeddings, grad=False, restrict_output=False, max_new_tokens=1
         )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
 
         # 3.0 - Get the combined embeddings of graph and text tokens.
-        llm_embs = self.llm.get_embeddings(prompt=action_prompt.format(reasoning_statement=reasoning_statement))
-        concatenated_embs = torch.cat([llm_embs.to(self.llm_device), graph_embs.to(self.llm_device)], dim=1)
-        concatenated_embs = torch.cat([concatenated_embs, self.llm.close_msg_emb], dim=1)
+        llm_embs = self.llm.get_input_embeddings(prompt=[action_prompt.format(reasoning_statement=reasoning_statement)])
+        embeddings = self.llm.format_embeddings(text_embeddings=llm_embs, graph_embeddings=graph_embs)
 
         # 4.0 - Generate the next action
-        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=concatenated_embs, max_new_tokens=5)
+        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=embeddings, max_new_tokens=5)
         response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
@@ -91,26 +89,26 @@ class GITPolicy(nn.Module):
 
         G = np.array(G)
         G_mean = G.mean()
-        G_std = G.std() + 1e-8 # add small episilon to avoid div by 0
+        G_std = G.std() + 1e-8  # add small episilon to avoid div by 0
 
         # Check that the total reward is not 0
         if sum(x[0] for x in self.roll_out) == 0:
-            return 0,0
-        
+            return 0, 0
+
         # Calculate loss for the episode and do backprop
         total_loss = 0
         for r, prob in self.roll_out[::-1]:
-                R = r + gamma * R
-                for p in prob:
-                    loss = -p * ((R - G_mean) / G_std)
-                    total_loss += loss
-        
+            R = r + gamma * R
+            for p in prob:
+                loss = -p * ((R - G_mean) / G_std)
+                total_loss += loss
+
         total_loss.backward()
         self.optimizer.step()
-        
+
         # Reset gradients
         self.optimizer.zero_grad()
-        
+
         # Get average reward and reset rollout
         mean_reward = np.mean([rew[0] for rew in self.roll_out])
         self.roll_out = []

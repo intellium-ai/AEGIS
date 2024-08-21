@@ -232,7 +232,6 @@ class GITAgent(AgentSessionABC):
                 action, probs = self._calculate_action(obs)
                 obs, rewards, done, _ = self._env.step(action=action)
                 
-                print('probs:', probs)
                 self._agent.put_data((rewards, probs))
 
                 steps += 1
