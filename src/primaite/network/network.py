@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 import matplotlib.pyplot as plt
+from matplotlib.colors import Normalize
 import networkx as nx
 import pandas as pd
 
@@ -13,6 +14,8 @@ from primaite.common.enums import SoftwareState
 from primaite.environment.primaite_env import Primaite
 from primaite.links import Link
 from primaite.nodes import ActiveNode, Node, NodeUnion, ServiceNode
+from primaite.common.enums import NodeType, SoftwareState
+
 
 
 @dataclass
@@ -82,7 +85,7 @@ class Network(Serializable):
 
     def traffic_table(self) -> pd.DataFrame:
 
-        indices = [int(link.id) for link in self.links]
+        indices = [i for i in range(len(self.links))]
 
         traffic_dict = {
             protocol
@@ -96,55 +99,58 @@ class Network(Serializable):
 
         return traffic_table
 
-    def display_graph(self):
-        # Make sure node locations in plot are constant
-        G = self.graph
-        pos = nx.spring_layout(G, seed=100)
-        fig = plt.figure()
+    def display_graph(self, random_seed: int = 1729) -> None:
 
-        # Draw nodes
-        # Nodes which have at least one of the states not being NONE or ON/GOOD are marked as RED
-        node_color_map = []
-        for G_node in G:
-            node_id = G_node.node_id
-            node = self.nodes_dict[node_id]
-            if node.is_working():
-                node_color_map.append("tab:blue")
-            else:
-                node_color_map.append("tab:red")
+        # NOTE: not sure the color of links changes with traffic
 
-        # Draw edges
-        # The higher the traffic in an edge, the more red the link is
-        edge_color_map = []
-        for src, dest, data in G.edges(data=True):
-            link_id = data["id"]
+        pos = nx.spring_layout(self.graph, seed=random_seed)
+
+        # assigning colours to nodes
+        NODE_TYPE_MAP = {
+            NodeType.CCTV: {"colour": "#FFB3FF"},     # Pastel Magenta
+            NodeType.SWITCH: {"colour": "#A3C1E0"},   # Pastel Blue
+            NodeType.COMPUTER: {"colour": "#CFCFCF"}, # Pastel Gray
+            NodeType.LINK: {"colour": "#77DD77"},     # Pastel Green
+            NodeType.MONITOR: {"colour": "#FFFFB3"},  # Pastel Yellow
+            NodeType.PRINTER: {"colour": "#FFD1A3"},  # Pastel Orange
+            NodeType.LOP: {"colour": "#D1B3FF"},      # Pastel Purple
+            NodeType.RTU: {"colour": "#D2B48C"},      # Pastel Brown (Tan)
+            NodeType.ACTUATOR: {"colour": "#FFB6C1"}, # Pastel Pink
+            NodeType.SERVER: {"colour": "#B3FFFF"},   # Pastel Cyan
+        }
+
+        node_colors = [NODE_TYPE_MAP[v['type']]["colour"] for _, v in self.graph.nodes(data=True)]
+
+        # get traffic on each edge
+        edge_traffic_levels = []
+        for index, (src_node, dest_node, data) in enumerate(self.graph.edges(data=True)):
+            link_id = f"link_{index}"
             link = self.links_dict[link_id]
             traffic_level = link.get_traffic_level()
-            edge_color_map.append(traffic_level)
+            edge_traffic_levels.append(traffic_level)
 
+        # normalize edge traffic levels for better visualization
+        norm = Normalize(vmin=min(edge_traffic_levels), vmax=max(edge_traffic_levels))
+        edge_colors_normalized = [norm(level) for level in edge_traffic_levels]
+
+        # draw the network with edges colored by traffic level
         nx.draw_networkx(
-            G,
+            self.graph,
             pos=pos,
-            node_color=node_color_map,
+            node_color=node_colors,
             with_labels=False,
-            edge_color=edge_color_map,
-            edge_cmap=plt.cm.hot,  # type: ignore
-            edge_vmax=1.6,
+            edge_color=edge_colors_normalized,
+            edge_cmap=plt.cm.hot, 
+            edge_vmax=1.0, 
         )
 
-        pos_higher = {}
-        y_off = 0.05  # offset on the y axis
+        pos_higher = {k: (v[0], v[1]) for k, v in pos.items()}
+        nx.draw_networkx_labels(self.graph, pos=pos_higher, font_size=5, font_color="black")
 
-        for k, v in pos.items():
-            pos_higher[k] = (v[0], v[1] + y_off)
+        edge_labels = {(u, v): index for index, (u, v, _) in enumerate(self.graph.edges(data=True))}
+        nx.draw_networkx_edge_labels(self.graph, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
 
-        nx.draw_networkx_labels(G, pos=pos_higher, font_size=5, font_color="black")
-
-        edge_labels = {edge[0:2]: edge[2]["id"] for edge in G.edges(data=True)}
-
-        nx.draw_networkx_edge_labels(G, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
-
-        return fig
+        plt.show()
 
     def diff(self, prev: Network, limited_view=False, colors=True) -> list[str]:
         diff = []
@@ -192,3 +198,4 @@ class Network(Serializable):
         links = [link.serialize() for link in self.links]
 
         return [ports, services, nodes, links]
+        
