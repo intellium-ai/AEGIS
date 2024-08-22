@@ -8,637 +8,580 @@
   - name: HTTP
   - name: SSH
   - name: FTP
-- file_system_state: null
-  hardware_state: 'ON'
+- file_system_state: GOOD
+  hardware_state: SHUTTING_DOWN
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_0
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '0'
-  node_type: SERVER
-  priority: P5
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_1
-  node_class: SERVICENODE
-  node_id: '1'
-  node_type: SERVER
-  priority: P1
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_2
-  node_class: SERVICENODE
-  node_id: '2'
   node_type: SERVER
   priority: P2
   services: []
   software_state: GOOD
-- file_system_state: null
+- file_system_state: GOOD
+  hardware_state: 'OFF'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: Node_1
+  node_class: SERVICE
+  node_id: '1'
+  node_type: SERVER
+  priority: P2
+  services: []
+  software_state: GOOD
+- file_system_state: GOOD
+  hardware_state: BOOTING
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: Node_2
+  node_class: SERVICE
+  node_id: '2'
+  node_type: SERVER
+  priority: P5
+  services: []
+  software_state: GOOD
+- file_system_state: GOOD
   hardware_state: 'OFF'
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_3
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '3'
   node_type: SERVER
   priority: P5
   services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: 'OFF'
+- file_system_state: GOOD
+  hardware_state: NONE
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_4
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '4'
   node_type: SERVER
-  priority: P1
+  priority: P2
   services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: BOOTING
+- file_system_state: GOOD
+  hardware_state: NONE
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_5
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '5'
   node_type: SERVER
   priority: P1
   services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: NONE
+- file_system_state: GOOD
+  hardware_state: RESETTING
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_6
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '6'
   node_type: SERVER
-  priority: P4
+  priority: P3
   services: []
   software_state: GOOD
-- file_system_state: null
+- file_system_state: GOOD
   hardware_state: SHUTTING_DOWN
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_7
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '7'
   node_type: SERVER
-  priority: P5
+  priority: P4
   services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: RESETTING
-  ip_address: ''
+- file_system_state: GOOD
+  hardware_state: BOOTING
+  ip_address: 192.168.1.1
   item_type: NODE
   name: Node_8
-  node_class: PASSIVENODE
+  node_class: ACTIVE
   node_id: '8'
-  node_type: LINK
-  priority: P5
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: 'OFF'
+  node_type: COMPUTER
+  priority: P2
+  software_state: GOOD
+- file_system_state: GOOD
+  hardware_state: BOOTING
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_9
-  node_class: SERVICENODE
+  node_class: SERVICE
   node_id: '9'
   node_type: SERVER
-  priority: P3
+  priority: P2
   services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: RESETTING
-  ip_address: 192.168.1.1
+- hardware_state: SHUTTING_DOWN
   item_type: NODE
   name: Node_10
-  node_class: ACTIVENODE
+  node_class: NONE
   node_id: '10'
-  node_type: COMPUTER
+  node_type: SWITCH
   priority: P5
-  services: []
-  software_state: GOOD
-- file_system_state: null
+- hardware_state: BOOTING
+  item_type: NODE
+  name: Node_11
+  node_class: NONE
+  node_id: '11'
+  node_type: SWITCH
+  priority: P2
+- hardware_state: BOOTING
+  item_type: NODE
+  name: Node_12
+  node_class: NONE
+  node_id: '12'
+  node_type: LINK
+  priority: P4
+- file_system_state: GOOD
   hardware_state: SHUTTING_DOWN
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_11
-  node_class: ACTIVENODE
-  node_id: '11'
-  node_type: COMPUTER
-  priority: P4
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: RESETTING
-  ip_address: ''
-  item_type: NODE
-  name: Node_12
-  node_class: PASSIVENODE
-  node_id: '12'
-  node_type: SWITCH
-  priority: P1
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: RESETTING
-  ip_address: 192.168.1.1
-  item_type: NODE
   name: Node_13
-  node_class: ACTIVENODE
+  node_class: ACTIVE
   node_id: '13'
   node_type: CCTV
-  priority: P5
-  services: []
+  priority: P2
   software_state: GOOD
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: ''
+- hardware_state: RESETTING
   item_type: NODE
   name: Node_14
-  node_class: PASSIVENODE
+  node_class: NONE
   node_id: '14'
-  node_type: LINK
+  node_type: SWITCH
   priority: P4
-  services: []
-  software_state: null
-- file_system_state: null
+- file_system_state: GOOD
   hardware_state: 'OFF'
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_15
-  node_class: ACTIVENODE
+  node_class: ACTIVE
   node_id: '15'
-  node_type: COMPUTER
-  priority: P5
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: SHUTTING_DOWN
-  ip_address: ''
-  item_type: NODE
-  name: Node_16
-  node_class: PASSIVENODE
-  node_id: '16'
-  node_type: SWITCH
-  priority: P1
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_17
-  node_class: ACTIVENODE
-  node_id: '17'
-  node_type: COMPUTER
-  priority: P1
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_18
-  node_class: ACTIVENODE
-  node_id: '18'
   node_type: CCTV
   priority: P5
-  services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: SHUTTING_DOWN
+- file_system_state: GOOD
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: Node_16
+  node_class: ACTIVE
+  node_id: '16'
+  node_type: COMPUTER
+  priority: P5
+  software_state: GOOD
+- hardware_state: NONE
+  item_type: NODE
+  name: Node_17
+  node_class: NONE
+  node_id: '17'
+  node_type: SWITCH
+  priority: P4
+- hardware_state: RESETTING
+  item_type: NODE
+  name: Node_18
+  node_class: NONE
+  node_id: '18'
+  node_type: LINK
+  priority: P5
+- file_system_state: GOOD
+  hardware_state: BOOTING
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_19
-  node_class: ACTIVENODE
+  node_class: ACTIVE
   node_id: '19'
-  node_type: CCTV
-  priority: P2
-  services: []
+  node_type: COMPUTER
+  priority: P5
   software_state: GOOD
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: ''
+- file_system_state: GOOD
+  hardware_state: RESETTING
+  ip_address: 192.168.1.1
   item_type: NODE
   name: Node_20
-  node_class: PASSIVENODE
+  node_class: ACTIVE
   node_id: '20'
-  node_type: LINK
-  priority: P2
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_21
-  node_class: ACTIVENODE
-  node_id: '21'
-  node_type: CCTV
-  priority: P3
-  services: []
-  software_state: GOOD
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_22
-  node_class: ACTIVENODE
-  node_id: '22'
   node_type: COMPUTER
   priority: P2
-  services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: 'OFF'
-  ip_address: ''
+- hardware_state: 'OFF'
   item_type: NODE
-  name: Node_23
-  node_class: PASSIVENODE
-  node_id: '23'
-  node_type: LINK
-  priority: P3
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: ''
-  item_type: NODE
-  name: Node_24
-  node_class: PASSIVENODE
-  node_id: '24'
+  name: Node_21
+  node_class: NONE
+  node_id: '21'
   node_type: SWITCH
   priority: P5
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: 'ON'
-  ip_address: ''
+- hardware_state: RESETTING
+  item_type: NODE
+  name: Node_22
+  node_class: NONE
+  node_id: '22'
+  node_type: LINK
+  priority: P4
+- hardware_state: RESETTING
+  item_type: NODE
+  name: Node_23
+  node_class: NONE
+  node_id: '23'
+  node_type: SWITCH
+  priority: P1
+- hardware_state: 'OFF'
+  item_type: NODE
+  name: Node_24
+  node_class: NONE
+  node_id: '24'
+  node_type: LINK
+  priority: P2
+- hardware_state: NONE
   item_type: NODE
   name: Node_25
-  node_class: PASSIVENODE
+  node_class: NONE
   node_id: '25'
   node_type: SWITCH
-  priority: P2
-  services: []
-  software_state: null
-- file_system_state: null
-  hardware_state: SHUTTING_DOWN
+  priority: P1
+- file_system_state: GOOD
+  hardware_state: RESETTING
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_26
-  node_class: ACTIVENODE
+  node_class: ACTIVE
   node_id: '26'
-  node_type: COMPUTER
+  node_type: CCTV
   priority: P2
-  services: []
   software_state: GOOD
-- file_system_state: null
-  hardware_state: BOOTING
-  ip_address: ''
+- hardware_state: BOOTING
   item_type: NODE
   name: Node_27
-  node_class: PASSIVENODE
+  node_class: NONE
   node_id: '27'
-  node_type: LINK
-  priority: P1
-  services: []
-  software_state: null
-- file_system_state: null
+  node_type: SWITCH
+  priority: P4
+- file_system_state: GOOD
   hardware_state: 'OFF'
-  ip_address: ''
+  ip_address: 192.168.1.1
   item_type: NODE
   name: Node_28
-  node_class: PASSIVENODE
+  node_class: ACTIVE
   node_id: '28'
-  node_type: LINK
-  priority: P5
-  services: []
-  software_state: null
-- file_system_state: null
+  node_type: COMPUTER
+  priority: P1
+  software_state: GOOD
+- file_system_state: GOOD
   hardware_state: 'OFF'
   ip_address: 192.168.1.1
   item_type: NODE
   name: Node_29
-  node_class: ACTIVENODE
+  node_class: ACTIVE
   node_id: '29'
   node_type: CCTV
-  priority: P1
-  services: []
+  priority: P5
   software_state: GOOD
-- bandwidth: 154
+- bandwidth: 331
   destination: '1'
   id: link_0
   item_type: LINK
   name: link_0
   source: '0'
-- bandwidth: 832
+- bandwidth: 252
   destination: '2'
   id: link_1
   item_type: LINK
   name: link_1
   source: '0'
-- bandwidth: 907
+- bandwidth: 962
   destination: '3'
   id: link_2
   item_type: LINK
   name: link_2
   source: '0'
-- bandwidth: 286
+- bandwidth: 790
   destination: '4'
   id: link_3
   item_type: LINK
   name: link_3
   source: '0'
-- bandwidth: 1000
+- bandwidth: 530
   destination: '5'
   id: link_4
   item_type: LINK
   name: link_4
   source: '0'
-- bandwidth: 145
+- bandwidth: 244
   destination: '6'
   id: link_5
   item_type: LINK
   name: link_5
   source: '0'
-- bandwidth: 225
+- bandwidth: 296
   destination: '10'
   id: link_6
   item_type: LINK
   name: link_6
   source: '0'
-- bandwidth: 889
+- bandwidth: 700
   destination: '2'
   id: link_7
   item_type: LINK
   name: link_7
   source: '1'
-- bandwidth: 848
+- bandwidth: 257
   destination: '3'
   id: link_8
   item_type: LINK
   name: link_8
   source: '1'
-- bandwidth: 176
+- bandwidth: 893
   destination: '4'
   id: link_9
   item_type: LINK
   name: link_9
   source: '1'
-- bandwidth: 899
+- bandwidth: 698
   destination: '5'
   id: link_10
   item_type: LINK
   name: link_10
   source: '1'
-- bandwidth: 317
+- bandwidth: 379
   destination: '9'
   id: link_11
   item_type: LINK
   name: link_11
   source: '1'
-- bandwidth: 618
+- bandwidth: 114
   destination: '10'
   id: link_12
   item_type: LINK
   name: link_12
   source: '1'
-- bandwidth: 653
+- bandwidth: 976
   destination: '11'
   id: link_13
   item_type: LINK
   name: link_13
   source: '1'
-- bandwidth: 177
+- bandwidth: 248
   destination: '13'
   id: link_14
   item_type: LINK
   name: link_14
   source: '1'
-- bandwidth: 914
+- bandwidth: 461
   destination: '3'
   id: link_15
   item_type: LINK
   name: link_15
   source: '2'
-- bandwidth: 664
+- bandwidth: 401
   destination: '4'
   id: link_16
   item_type: LINK
   name: link_16
   source: '2'
-- bandwidth: 206
+- bandwidth: 812
   destination: '5'
   id: link_17
   item_type: LINK
   name: link_17
   source: '2'
-- bandwidth: 960
+- bandwidth: 710
   destination: '6'
   id: link_18
   item_type: LINK
   name: link_18
   source: '2'
-- bandwidth: 938
+- bandwidth: 722
   destination: '7'
   id: link_19
   item_type: LINK
   name: link_19
   source: '2'
-- bandwidth: 894
+- bandwidth: 154
   destination: '9'
   id: link_20
   item_type: LINK
   name: link_20
   source: '2'
-- bandwidth: 444
+- bandwidth: 719
   destination: '10'
   id: link_21
   item_type: LINK
   name: link_21
   source: '2'
-- bandwidth: 144
+- bandwidth: 775
   destination: '15'
   id: link_22
   item_type: LINK
   name: link_22
   source: '2'
-- bandwidth: 274
+- bandwidth: 687
   destination: '16'
   id: link_23
   item_type: LINK
   name: link_23
   source: '2'
-- bandwidth: 962
+- bandwidth: 427
   destination: '26'
   id: link_24
   item_type: LINK
   name: link_24
   source: '2'
-- bandwidth: 669
+- bandwidth: 535
   destination: '4'
   id: link_25
   item_type: LINK
   name: link_25
   source: '3'
-- bandwidth: 980
+- bandwidth: 721
   destination: '5'
   id: link_26
   item_type: LINK
   name: link_26
   source: '3'
-- bandwidth: 536
+- bandwidth: 879
   destination: '17'
   id: link_27
   item_type: LINK
   name: link_27
   source: '3'
-- bandwidth: 784
+- bandwidth: 899
   destination: '5'
   id: link_28
   item_type: LINK
   name: link_28
   source: '4'
-- bandwidth: 732
+- bandwidth: 425
   destination: '7'
   id: link_29
   item_type: LINK
   name: link_29
   source: '4'
-- bandwidth: 106
+- bandwidth: 347
   destination: '8'
   id: link_30
   item_type: LINK
   name: link_30
   source: '4'
-- bandwidth: 118
+- bandwidth: 106
   destination: '11'
   id: link_31
   item_type: LINK
   name: link_31
   source: '4'
-- bandwidth: 661
+- bandwidth: 461
   destination: '9'
   id: link_32
   item_type: LINK
   name: link_32
   source: '5'
-- bandwidth: 665
+- bandwidth: 935
   destination: '8'
   id: link_33
   item_type: LINK
   name: link_33
   source: '6'
-- bandwidth: 831
+- bandwidth: 520
   destination: '20'
   id: link_34
   item_type: LINK
   name: link_34
   source: '6'
-- bandwidth: 332
+- bandwidth: 193
   destination: '7'
   id: link_35
   item_type: LINK
   name: link_35
   source: '6'
-- bandwidth: 555
+- bandwidth: 575
   destination: '9'
   id: link_36
   item_type: LINK
   name: link_36
   source: '6'
-- bandwidth: 901
+- bandwidth: 154
   destination: '14'
   id: link_37
   item_type: LINK
   name: link_37
   source: '7'
-- bandwidth: 317
+- bandwidth: 314
   destination: '22'
   id: link_38
   item_type: LINK
   name: link_38
   source: '7'
-- bandwidth: 412
+- bandwidth: 148
   destination: '23'
   id: link_39
   item_type: LINK
   name: link_39
   source: '7'
-- bandwidth: 577
+- bandwidth: 191
   destination: '28'
   id: link_40
   item_type: LINK
   name: link_40
   source: '7'
-- bandwidth: 199
+- bandwidth: 960
   destination: '9'
   id: link_41
   item_type: LINK
   name: link_41
   source: '7'
-- bandwidth: 266
+- bandwidth: 638
   destination: '18'
   id: link_42
   item_type: LINK
   name: link_42
   source: '8'
-- bandwidth: 572
+- bandwidth: 379
   destination: '27'
   id: link_43
   item_type: LINK
   name: link_43
   source: '8'
-- bandwidth: 703
+- bandwidth: 469
   destination: '9'
   id: link_44
   item_type: LINK
   name: link_44
   source: '8'
-- bandwidth: 818
+- bandwidth: 496
   destination: '12'
   id: link_45
   item_type: LINK
   name: link_45
   source: '9'
-- bandwidth: 107
+- bandwidth: 277
   destination: '19'
   id: link_46
   item_type: LINK
   name: link_46
   source: '9'
-- bandwidth: 820
+- bandwidth: 823
   destination: '21'
   id: link_47
   item_type: LINK
   name: link_47
   source: '9'
-- bandwidth: 984
+- bandwidth: 969
   destination: '24'
   id: link_48
   item_type: LINK
   name: link_48
   source: '9'
-- bandwidth: 704
+- bandwidth: 947
   destination: '25'
   id: link_49
   item_type: LINK
   name: link_49
   source: '9'
-- bandwidth: 248
+- bandwidth: 914
   destination: '29'
   id: link_50
   item_type: LINK
