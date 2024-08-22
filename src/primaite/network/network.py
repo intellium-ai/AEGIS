@@ -191,4 +191,4 @@ class Network(Serializable):
         nodes = [node.serialize() for node in self.nodes]
         links = [link.serialize() for link in self.links]
 
-        return [ports, services, nodes, links]
+        return [ports, services, *nodes, *links]
