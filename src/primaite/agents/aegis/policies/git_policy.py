@@ -59,7 +59,7 @@ class GITPolicy(nn.Module):
 
         # 2.0 - Reason about the network (no grad) with graph tokens too
         reasoning_embs = self.llm.get_input_embeddings(prompt=[reasoning_prompt])
-        embeddings = self.llm.format_embeddings(text_embeddings=reasoning_embs, graph_embeddings=graph_embs)
+        embeddings = self.llm.format_inputs(text_embeddings=reasoning_embs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
             text_embeddings=embeddings, grad=False, restrict_output=False, max_new_tokens=1
@@ -68,7 +68,7 @@ class GITPolicy(nn.Module):
 
         # 3.0 - Get the combined embeddings of graph and text tokens.
         llm_embs = self.llm.get_input_embeddings(prompt=[action_prompt.format(reasoning_statement=reasoning_statement)])
-        embeddings = self.llm.format_embeddings(text_embeddings=llm_embs, graph_embeddings=graph_embs)
+        embeddings = self.llm.format_inputs(text_embeddings=llm_embs, graph_embeddings=graph_embs)
 
         # 4.0 - Generate the next action
         token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=embeddings, max_new_tokens=5)

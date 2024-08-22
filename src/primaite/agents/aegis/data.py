@@ -27,21 +27,24 @@ class GLLMDataset(Dataset):
     def _get_target_hidden_states(self, gt_answers: List[str]):
         hidden_states = torch.empty(0)
         for gt_answer in gt_answers:
-            embs = self.llm.get_input_embeddings(prompts=[gt_answer], grad=False)
+            inputs = self.llm.get_input_embeddings(prompts=[gt_answer], grad=False)
             hidden_states = torch.cat(
-                [hidden_states, self.llm.get_output_embeddings(inputs_embeds=embs, grad=False).to("cpu")], dim=0
+                [
+                    hidden_states,
+                    self.llm.get_output_embeddings(inputs_embeds=inputs["inputs_embeds"], grad=False).to("cpu"),
+                ],
+                dim=0,
             )
         return hidden_states
 
 
 def collate_fn(batch):
     graph_data_list = [item["graph"] for item in batch]
-    questions = [
-        item["question"] for item in batch
-    ]  # TODO: prepare these questions and answers (such as inputs embeds) in this collate fn rather than inside the gllm training code
+    questions = [item["question"] for item in batch]
+
     gt_answers = [item["gt_answer"] for item in batch]
     graph_batch = Batch.from_data_list(graph_data_list)
-    gt_hidden_states = [item["gt_hidden_states"] for item in batch]
+    gt_hidden_states = torch.cat([item["gt_hidden_states"] for item in batch], dim=0).unsqueeze(1)
     return {
         "graphs": graph_batch,
         "questions": questions,

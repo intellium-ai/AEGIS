@@ -49,28 +49,30 @@ class GLLM(torch.nn.Module):
     def forward(self, graph_batch, gllm_prompts):
         """This should return the action integer"""
         # 1.0 - Get the graph token(s)
-        graph_output = self.ge(graph_batch.x, graph_batch.edge_index, batch=graph_batch.batch)
-        graph_embs = graph_output.to(torch.float16)  # Match graph embs with LLM dimensionality
+        graph_embs = self.ge(graph_batch).to(torch.float16)
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
 
         # 2.0 - Get the combined embeddings of graph and text tokens.
-        llm_embs = self.llm.get_input_embeddings(prompts=gllm_prompts, grad=False)
+        inputs = self.llm.get_input_embeddings(prompts=gllm_prompts, grad=False)
 
-        embeddings = self.llm.format_embeddings(text_embeddings=llm_embs, graph_embeddings=graph_embs)
+        # 3.0 - Add BOS, graph token embs, text token embs and EOS token - shifting padding along to the right as required to maintain standardization of sequence length.
+        inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
         # 3.0 - Generate the next action
         token_ids, probs, gllm_hidden_states = self.llm.generate_from_embeddings(
-            text_embeddings=embeddings,
-            max_new_tokens=20,
+            inputs_embeds=inputs["inputs_embeds"],
+            attention_mask=inputs["attention_mask"],
+            max_new_tokens=10,
             restrict_output=False,
             grad=True,
             last_hidden_state=True,
         )
-        print("toto bene")
 
-        gllm_response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
+        # ok, next you need to plug the output of this generate from embeddings (reemebr, there are multiple sesqueneces now because it's a batch!!) into the hidden states thing (ohh, hidden states, I forgot to check if this works as expectec??) and effectively get the cosine embeddings loss for ALL sequences in the batch against the 'gt_embeddings' we have in our GLLMDataset which is our ground truth. Can we do a training test with this and see how it looks when overfit to a big dataset of all the same data? Does it learn after n epochs? If not, the next task is ' to figure out why this is the case !! Also point to rememeber, you did infact move the graph tokens to the beginning of the sequence embeddings so check this is in the RTIGHT PLACE AND NOT BEFORE <BOS TOKEN> and that your prompts are adjusted as required to better reflect this. Finally, you'll definitely need to go back to the GIT agent and make some adjustments' here to ensure that your work on batching the training loop can be applied to the GIT policy too! (batch size is only 1 here since it's in primaite and we can only do 1 step at a time anyway.)' have fun soft lad ! :D
 
-        return gllm_response, gllm_hidden_states
+        gllm_responses = self.llm.tokenizer.batch_decode(token_ids, skip_special_tokens=True)
+
+        return gllm_responses, gllm_hidden_states
 
     def build_prompts(
         self, questions: List[str], network_desc: str, model: Literal["openai", "gllm"] = "openai"
@@ -86,35 +88,34 @@ class GLLM(torch.nn.Module):
     def get_cosine_embeddings_loss(self, openai_hidden_states, gllm_hidden_states):
 
         loss = self.loss_fn(
-            openai_hidden_states.view(-1, self.llm.llm_embedding_size),
+            openai_hidden_states.view(-1, self.llm.llm_embedding_size).to(gllm_hidden_states.device),
             gllm_hidden_states.view(-1, self.llm.llm_embedding_size),
-            torch.ones(gllm_hidden_states.shape[0]).to("cuda:0"),
+            torch.ones(gllm_hidden_states.shape[0]).to(gllm_hidden_states.device),
         )
 
         return loss
 
 
-def train_loop(model, dataloader: DataLoader, network_desc: str):
-
+def train_loop(model: GLLM, dataloader: DataLoader, network_desc: str, n_epochs: int = 10):
     model.train(mode=True)
-    # Reset openai last hidden states
-    epochs = 1
-    for epoch in range(epochs):
+
+    for epoch in range(n_epochs):
         gllm_responses = []
-        gllm_hidden_states = torch.empty(0).to("cuda:0")
-        model.optimizer.zero_grad()
 
         for batch in dataloader:
+            model.optimizer.zero_grad()
             questions = batch["questions"]
             gllm_prompts = model.build_prompts(questions=questions, network_desc=network_desc, model="gllm")
 
-            gllm_response, last_hidden_state = model(batch["graphs"], gllm_prompts)
-            gllm_responses.append(gllm_response)
-            gllm_hidden_states = torch.cat([gllm_hidden_states, last_hidden_state], 0)
-        loss = model.get_cosine_embeddings_loss(openai_hidden_states, gllm_hidden_states)
-        print(gllm_responses[0])
-        # Do the backwards pass
-        loss.backward()
+            gllm_texts, gllm_hidden_states = model(batch["graphs"], gllm_prompts)
+            gllm_responses.extend(gllm_texts)
+
+            loss = model.get_cosine_embeddings_loss(batch["gt_hidden_states"], gllm_hidden_states)
+            # Do the backwards pass
+            loss.backward()
+
+            # Clear up any gpu memory that may be holding onto tensors unnecessarily
+            torch.cuda.empty_cache()
 
         # Print any None gradients
         # for name, param in model.named_parameters():
@@ -122,6 +123,6 @@ def train_loop(model, dataloader: DataLoader, network_desc: str):
 
         model.optimizer.step()
 
-        print(f"Episode {episode} Loss:", loss.item())
+        print(f"Epoch {epoch} Loss:", loss.item(), gllm_responses[0].replace("\n", "//n"))
 
-    return gllm_responses, openai_responses
+    return gllm_responses
