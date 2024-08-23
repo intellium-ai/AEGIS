@@ -16,6 +16,7 @@ from primaite.agents.llm.utils import get_obs_act_history_str, obs_diff
 from primaite.environment import EnvironmentState
 import matplotlib.pyplot as plt
 from primaite.agents.llm.prompting import AgentNodeAction
+from torch_geometric.data.batch import Batch
 import logging
 
 logging.getLogger().setLevel(logging.INFO)
@@ -71,15 +72,14 @@ class GITAgent(AgentSessionABC):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
         state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(device)
+        state = Batch.from_data_list([state])
         return state
 
     def _calculate_action(self, obs) -> Tuple[int, torch.Tensor]:
 
-        data = self.create_graph(obs)
+        graph_batch = self.create_graph(obs)
         action_prompt, reasoning_prompt = self._build_prompt()
-        llm_action_text, probs, reasoning_statement = self._agent(
-            data.x, data.edge_index, action_prompt, reasoning_prompt
-        )
+        llm_action_text, probs, reasoning_statement = self._agent(graph_batch, action_prompt, reasoning_prompt)
 
         # try:
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
@@ -225,12 +225,17 @@ class GITAgent(AgentSessionABC):
         mean_rewards = []
         for ep in range(episodes):
             obs = self._env.reset()
+
+            # TEMP: Jump ahead because reward is 0 at the beginning for a while
+            # for _ in range(20):
+            #     obs, rewards, done, _ = self._env.step(0)
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
 
                 action, probs = self._calculate_action(obs)
                 obs, rewards, done, _ = self._env.step(action=action)
+
                 self._agent.put_data((rewards, probs))
 
                 steps += 1

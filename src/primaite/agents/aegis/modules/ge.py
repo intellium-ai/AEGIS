@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge
+from torch_geometric.data.batch import Batch
 import logging
 
 
@@ -23,10 +24,9 @@ class GraphEmbedding(nn.Module):
         self.output_dim = output_dim
         self.n_gat_layers = n_gat_layers
 
-    def forward(self, x, edge_index):
-        n_nodes = x.shape[0]
-        x = x.to(self.device)
-        edge_index = edge_index.to(self.device)
+    def forward(self, graph_batch):
+        x = graph_batch.x.to(self.device)
+        edge_index = graph_batch.edge_index.to(self.device)
 
         x = self.gat(x, edge_index)
         if self.n_gat_layers > 1:
@@ -39,8 +39,8 @@ class GraphEmbedding(nn.Module):
         else:
             x = x
 
-        x = global_add_pool(x, torch.zeros(n_nodes, dtype=torch.int64).to(self.device))
+        x = global_add_pool(x=x, batch=graph_batch.batch)
         x = F.relu(x)
         x = self.linear(x)
-        x = x.view(self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
+        x = x.view(graph_batch.batch_size, self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
         return x
