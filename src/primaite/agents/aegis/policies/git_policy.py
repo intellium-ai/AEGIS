@@ -49,33 +49,40 @@ class GITPolicy(nn.Module):
     def put_data(self, data):
         self.roll_out.append(data)
 
-    def forward(self, x, edge_index, action_prompt, reasoning_prompt):
+    def forward(self, graph_batch, action_prompt, reasoning_prompt):
         """This should return the action integer"""
 
         # 1.0 - Get the graph token(s)
-        graph_output = self.ge(x, edge_index)
-        graph_embs = graph_output.unsqueeze(0).to(torch.float16)  # Match graph embs with LLM dimensionality
+        graph_output = self.ge(graph_batch)
+        print("graph output shape:", graph_output.shape)
+        graph_embs = graph_output.to(torch.float16)  # Match graph embs with LLM dimensionality
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
 
         # 2.0 - Reason about the network (no grad) with graph tokens too
-        reasoning_embs = self.llm.get_input_embeddings(prompt=[reasoning_prompt])
-        embeddings = self.llm.format_inputs(text_embeddings=reasoning_embs, graph_embeddings=graph_embs)
+        inputs = self.llm.get_input_embeddings(prompts=[reasoning_prompt])
+        inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            text_embeddings=embeddings, grad=False, restrict_output=False, max_new_tokens=1
+            inputs_embeds=inputs["inputs_embeds"],
+            attention_mask=inputs["attention_mask"],
+            grad=False,
+            restrict_output=False,
+            max_new_tokens=15,
         )  # Set grad to true when more GPUage
-        reasoning_statement = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
+        reasoning_statement = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
         # 3.0 - Get the combined embeddings of graph and text tokens.
-        llm_embs = self.llm.get_input_embeddings(prompt=[action_prompt.format(reasoning_statement=reasoning_statement)])
-        embeddings = self.llm.format_inputs(text_embeddings=llm_embs, graph_embeddings=graph_embs)
+        inputs = self.llm.get_input_embeddings(prompts=[action_prompt.format(reasoning_statement=reasoning_statement)])
+        inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
-        # 4.0 - Generate the next action
-        token_ids, probs = self.llm.generate_from_embeddings(text_embeddings=embeddings, max_new_tokens=5)
-        response = self.llm.tokenizer.decode(token_ids, skip_special_tokens=True)
+        # 4.0 - Generate the next action (5 tokens required per action)
+        token_ids, probs = self.llm.generate_from_embeddings(
+            inputs_embeds=inputs["inputs_embeds"], attention_mask=inputs["attention_mask"], max_new_tokens=5
+        )
+        response = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
-        return response, probs, reasoning_statement
+        return response, probs.squeeze(), reasoning_statement
 
     def train_net(self, gamma: float = 0.99) -> Tuple[float, float]:
         R = 0
@@ -108,6 +115,9 @@ class GITPolicy(nn.Module):
 
         # Reset gradients
         self.optimizer.zero_grad()
+
+        # Clear up any gpu memory that may be holding onto tensors unnecessarily
+        torch.cuda.empty_cache()
 
         # Get average reward and reset rollout
         mean_reward = np.mean([rew[0] for rew in self.roll_out])

@@ -1,6 +1,6 @@
 import torch
 import logging
-from typing import List, Tuple, Dict, Literal
+from typing import List, Literal
 import torch.nn.functional as F
 from peft.tuners.lora import LoraConfig
 from torch.optim import Adam
@@ -42,7 +42,6 @@ class GLLM(torch.nn.Module):
             output_dim=self.llm.llm_embedding_size,
         ).to(self.ge_device)
 
-        # self.llm_optimizer = Adam(self.llm.parameters(), lr=self.llm_learning_rate)
         self.optimizer = Adam(self.parameters(), lr=self.ge_learning_rate)
         self.loss_fn = torch.nn.CosineEmbeddingLoss()
 
@@ -58,7 +57,7 @@ class GLLM(torch.nn.Module):
         # 3.0 - Add BOS, graph token embs, text token embs and EOS token - shifting padding along to the right as required to maintain standardization of sequence length.
         inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
-        # 3.0 - Generate the next action
+        # 3.0 - Generate the response
         token_ids, probs, gllm_hidden_states = self.llm.generate_from_embeddings(
             inputs_embeds=inputs["inputs_embeds"],
             attention_mask=inputs["attention_mask"],
@@ -67,8 +66,6 @@ class GLLM(torch.nn.Module):
             grad=True,
             last_hidden_state=True,
         )
-
-        # ok, next you need to plug the output of this generate from embeddings (reemebr, there are multiple sesqueneces now because it's a batch!!) into the hidden states thing (ohh, hidden states, I forgot to check if this works as expectec??) and effectively get the cosine embeddings loss for ALL sequences in the batch against the 'gt_embeddings' we have in our GLLMDataset which is our ground truth. Can we do a training test with this and see how it looks when overfit to a big dataset of all the same data? Does it learn after n epochs? If not, the next task is ' to figure out why this is the case !! Also point to rememeber, you did infact move the graph tokens to the beginning of the sequence embeddings so check this is in the RTIGHT PLACE AND NOT BEFORE <BOS TOKEN> and that your prompts are adjusted as required to better reflect this. Finally, you'll definitely need to go back to the GIT agent and make some adjustments' here to ensure that your work on batching the training loop can be applied to the GIT policy too! (batch size is only 1 here since it's in primaite and we can only do 1 step at a time anyway.)' have fun soft lad ! :D
 
         gllm_responses = self.llm.tokenizer.batch_decode(token_ids, skip_special_tokens=True)
 
@@ -116,10 +113,6 @@ def train_loop(model: GLLM, dataloader: DataLoader, network_desc: str, n_epochs:
 
             # Clear up any gpu memory that may be holding onto tensors unnecessarily
             torch.cuda.empty_cache()
-
-        # Print any None gradients
-        # for name, param in model.named_parameters():
-        #     print(f"Gradient for {name}: {param.grad}")
 
         model.optimizer.step()
 

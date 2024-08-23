@@ -1,6 +1,6 @@
 import torch
 from transformers import BitsAndBytesConfig, AutoTokenizer
-from trl import PPOTrainer, PPOConfig, AutoModelForCausalLMWithValueHead
+from trl import AutoModelForCausalLMWithValueHead
 from peft.tuners.lora import LoraConfig
 from typing import List, Tuple, Dict
 
@@ -186,7 +186,7 @@ class LLM(torch.nn.Module):
         max_new_tokens: int = 10,
         restrict_output: bool = True,
         last_hidden_state=False,
-    ) -> Tuple[List[int], torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         next_token_ids = torch.empty(0, dtype=torch.int8)
         next_token_probs = torch.empty(0)
@@ -268,7 +268,8 @@ class LLM(torch.nn.Module):
 
         return next_token_ids, next_token_probs
 
-    def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int]) -> Tuple[int, torch.Tensor]:
+    def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int]) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
         allowed_indices = []
 
         if prev_token_ids:
@@ -311,3 +312,38 @@ class LLM(torch.nn.Module):
             probs[i] = max_probs
 
         return token_ids.unsqueeze(1), probs.unsqueeze(1)
+
+    def _generate_last_state(
+        self, texts: List[str] = None, input_ids: torch.Tensor = None, input_embeddings: torch.Tensor = None
+    ) -> torch.Tensor:
+
+        if texts is not None:
+            texts = [self.tokenizer.bos_token + text + self.tokenizer.eos_token for text in texts]
+            tokenizer_output = self.tokenizer(texts, return_tensors="pt", padding=True)
+
+            input_ids = tokenizer_output["input_ids"]
+            eos_idx = torch.sum(tokenizer_output["attention_mask"], dim=1) - 1
+
+        if input_ids is not None:
+            input_embeddings = self.model.pretrained_model.get_input_embeddings()(input_ids)
+
+        hidden_layer_output = self.model(inputs_embeds=input_embeddings)[1]["hidden_states"][-1]
+
+        if texts is None:
+            eos_idx = torch.full((hidden_layer_output.shape[0],), fill_value=-1)
+        final_embeddings = hidden_layer_output[
+            torch.arange(
+                hidden_layer_output.shape[0],
+            ),
+            eos_idx,
+        ]
+
+        return final_embeddings
+
+    def generate_last_state(self, grad: bool = True, **kwargs) -> torch.Tensor:
+
+        if grad:
+            return self._generate_last_state(**kwargs)
+        else:
+            with torch.no_grad():
+                return self._generate_last_state(**kwargs)

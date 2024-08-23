@@ -9,7 +9,7 @@ class OpenAIClient:
         messages = [{"role": "user", "content": prompt}]
 
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo", messages=messages, max_tokens=max_new_tokens, logprobs=True, top_logprobs=20
+            model="gpt-3.5-turbo", messages=messages, max_tokens=max_new_tokens
         )
 
-        return response
+        return response.choices[0].message.content
