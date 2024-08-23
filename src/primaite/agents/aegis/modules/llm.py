@@ -32,7 +32,7 @@ class LLM(torch.nn.Module):
 
         self.model.gradient_checkpointing_enable()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, torch_dtype=torch.float16, padding=True, device_map="auto"
+            model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="left"
         )
 
         # Figure out what tokens to allow in action generate calls
@@ -194,6 +194,7 @@ class LLM(torch.nn.Module):
         stop_generating = False
         per_token_attention = torch.ones((inputs_embeds.shape[0], 1))
         # Generate until max_new_tokens reached
+        eos_indices = set()
         while not stop_generating:
             if not grad:
                 with torch.no_grad():
@@ -201,8 +202,12 @@ class LLM(torch.nn.Module):
             else:
                 output = self.model.forward(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
 
+            # Figure out which logits in the sequence to sample from (the right-most significant token determined with the attention mask)
+            last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
+            last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
+
             # Get next logits for each input sequence
-            logits = output[1]["logits"][:, -1]
+            logits = output[1]["logits"][torch.arange(inputs_embeds.size(0)), last_non_pad_indices]
 
             # Apply restriction on the output logits (or don't)
             if restrict_output:
@@ -217,21 +222,40 @@ class LLM(torch.nn.Module):
                 token_ids = logits.indices.unsqueeze(1)
                 probs = logits.values.unsqueeze(1)
 
-            # Update probs and token ids
+            # For any sequence that is done already, just set their next token and prob to the last token and prob (the EOS token and prob)
+            if len(eos_indices) != 0:
+                eos_mask = torch.zeros(token_ids.size(0), dtype=torch.bool)
+
+                # True for indices in eos_indices
+                for idx in eos_indices:
+                    eos_mask[idx] = True
+
+                # For sequences that are done, set their next token and prob to their last token and prob
+                token_ids[eos_mask] = next_token_ids[eos_mask, -1].unsqueeze(1)
+                probs[eos_mask] = next_token_probs[eos_mask, -1].unsqueeze(1)
+
+            # Add the new tokens to the sequences
             next_token_ids = torch.cat([next_token_ids, token_ids.to("cpu")], dim=1)
             next_token_probs = torch.cat([next_token_probs, probs.to("cpu")], dim=1)
 
-            # Get embeddings of the new token
+            # Check for EOS token IDs so we can exclude that sequence from the next token generation.
+            eos_indices.update(
+                torch.nonzero(token_ids == self.tokenizer.eos_token_id, as_tuple=False)[:, 0].flatten().tolist()
+            )
+
+            # Get embeddings of the new tokens
             new_embeddings = self.get_input_embeddings(token_ids=token_ids, grad=True)["inputs_embeds"]
 
             # Add the new token to the inputs_embeds and expand the attention mask accordingly
-            # TODO: You need to be checking here for EOS token and setting AM to 0 and stopping this sequence generation (manually adding the EOS token ID and AM 0).
+            # TODO: For sequences that are complete, don't generate more tokens for them to save on compute (they get binned anyway when replaced with EOS)
             inputs_embeds = torch.cat([inputs_embeds, new_embeddings], dim=1)
             attention_mask = torch.cat([attention_mask, per_token_attention], dim=1)
+
             n_tokens += 1
 
-            # Check if eos token or max_new_tokens limit reached
-            if n_tokens == max_new_tokens:
+            # Check if all sequences have reached their eos token or max_new_tokens limit reached
+            if n_tokens == max_new_tokens or len(eos_indices) == inputs_embeds.shape[0]:
+
                 stop_generating = True
 
         # Collect the last hidden states
