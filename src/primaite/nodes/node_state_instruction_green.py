@@ -17,7 +17,7 @@ class NodeStateInstructionGreen(Serializable):
         _node_id: str,
         _node_pol_type: NodePOLType,
         _service_name: str,
-        _state: Union["HardwareState", "SoftwareState", "FileSystemState"],
+        _state: Union[HardwareState, SoftwareState, FileSystemState],
     ) -> None:
         """
         Initialise the Node State Instruction.
@@ -37,7 +37,7 @@ class NodeStateInstructionGreen(Serializable):
         self.node_pol_type: "NodePOLType" = _node_pol_type
         self.service_name: str = _service_name  # Not used when not a service instruction
         # TODO: confirm type of state
-        self.state: Union["HardwareState", "SoftwareState", "FileSystemState"] = _state
+        self.state: Union[HardwareState, SoftwareState, FileSystemState] = _state
 
     def serialize(self):
         state_dict = {
@@ -48,7 +48,7 @@ class NodeStateInstructionGreen(Serializable):
             "nodeId": self.node_id,
             "type": self.node_pol_type.name,
             "protocol": self.service_name,
-            "state": self.state.name,
+            "state": self.state._name_,
         }
         return state_dict
 
