@@ -1,7 +1,6 @@
 import torch
 import logging
 from typing import List, Literal
-import torch.nn.functional as F
 from peft.tuners.lora import LoraConfig
 from torch.optim import Adam
 from primaite.agents.aegis.modules.llm import LLM
@@ -19,15 +18,13 @@ class GLLM(torch.nn.Module):
         self,
         model_name: str = "HuggingFaceTB/SmolLM-1.7B-Instruct",
         ge_device: str = "cuda:0",
-        ge_learning_rate: float = 0.005,
-        llm_learning_rate: float = 0.005,
+        learning_rate: float = 0.005,
         peft_config: LoraConfig = default_peft_config,
     ):
         super(GLLM, self).__init__()
         self.ge_device = ge_device
         self.model_name = model_name
-        self.ge_learning_rate = ge_learning_rate
-        self.llm_learning_rate = llm_learning_rate
+        self.learning_rate = learning_rate
 
         # Initialise peft_config
         self.peft_config = peft_config
@@ -42,7 +39,7 @@ class GLLM(torch.nn.Module):
             output_dim=self.llm.llm_embedding_size,
         ).to(self.ge_device)
 
-        self.optimizer = Adam(self.parameters(), lr=self.ge_learning_rate)
+        self.optimizer = Adam(self.parameters(), lr=self.learning_rate)
         self.loss_fn = torch.nn.CosineEmbeddingLoss()
 
     def forward(self, graph_batch, gllm_prompts):
@@ -114,7 +111,7 @@ def train_loop(model: GLLM, dataloader: DataLoader, network_desc: str, n_epochs:
             # Clear up any gpu memory that may be holding onto tensors unnecessarily
             torch.cuda.empty_cache()
 
-        model.optimizer.step()
+            model.optimizer.step()
 
         print(f"Epoch {epoch} Loss:", loss.item(), gllm_responses[0].replace("\n", "//n"))
 
