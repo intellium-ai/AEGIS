@@ -100,6 +100,7 @@ class GITPolicy(nn.Module):
 
         # Check that the total reward is not 0
         if sum(x[0] for x in self.roll_out) == 0:
+            self.roll_out = []  # reset
             return 0, 0
 
         # Calculate loss for the episode and do backprop

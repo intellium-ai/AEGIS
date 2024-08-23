@@ -227,8 +227,8 @@ class GITAgent(AgentSessionABC):
             obs = self._env.reset()
 
             # TEMP: Jump ahead because reward is 0 at the beginning for a while
-            for _ in range(20):
-                obs, rewards, done, _ = self._env.step(0)
+            # for _ in range(20):
+            #     obs, rewards, done, _ = self._env.step(0)
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
