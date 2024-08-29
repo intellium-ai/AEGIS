@@ -7,8 +7,8 @@ import torch
 from torch.distributions import Categorical
 
 from primaite import getLogger
+from primaite.agents.aegis.policies.gnn_policy import GNNPolicy
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.gnn.gnn_policy import GNNPolicy
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite
