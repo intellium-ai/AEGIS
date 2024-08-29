@@ -1,12 +1,15 @@
 # © Crown-owned copyright 2023, Defence Science and Technology Laboratory UK
+from collections import defaultdict
 from typing import Any, Dict, List, Literal, Optional, Union
 
+import networkx as nx
 import numpy as np
+import torch
 import torch_geometric
 import torch_geometric.data
+from torch_geometric.data import Data
 
 from primaite import getLogger
-from primaite.common.custom_typing import NodeUnion
 from primaite.common.enums import (
     FileSystemState,
     HardwareState,
@@ -18,11 +21,7 @@ from primaite.common.enums import (
     RulePermissionType,
     SoftwareState,
 )
-import torch
-from collections import defaultdict
-import networkx as nx
-
-from torch_geometric.data import Data
+from primaite.nodes import NodeUnion
 
 _LOGGER = getLogger(__name__)
 
@@ -80,111 +79,6 @@ def transform_action_acl_readable(action: List[int]) -> List[Union[str, int]]:
             new_action[n + 2] = "ANY"
 
     return new_action
-
-
-def is_valid_node_action(action: List[int]) -> bool:
-    """
-    Is the node action an actual valid action.
-
-    Only uses information about the action to determine if the action has an effect
-
-    Does NOT consider:
-    - Node ID not valid to perform an operation - e.g. selected node has no service so cannot patch
-    - Node already being in that state (turning an ON node ON)
-
-    :param action: Agent action, formatted as a list of ints, for more information check out
-        `primaite.environment.primaite_env.Primaite`
-    :type action: List[int]
-    :return: Whether the action is valid
-    :rtype: bool
-    """
-    action_r = transform_action_node_readable(action)
-
-    node_property = action_r[1]
-    node_action = action_r[2]
-
-    # print("node property", node_property, "\nnode action", node_action)
-
-    if node_property == "NONE":
-        return False
-    if node_action == "NONE":
-        return False
-    if node_property == "OPERATING" and node_action == "PATCH":
-        # Operating State cannot PATCH
-        return False
-    if node_property != "OPERATING" and node_action not in [
-        "NONE",
-        "PATCH",
-    ]:
-        # Software States can only do Nothing or Patch
-        return False
-    return True
-
-
-def is_valid_acl_action(action: List[int], implicit_permission: RulePermissionType) -> bool:
-    """
-    Is the ACL action an actual valid action.
-
-    Only uses information about the action to determine if the action has an effect.
-
-    Does NOT consider:
-        - Trying to create identical rules
-        - Trying to create a rule which is a subset of another rule (caused by "ANY")
-
-    :param action: Agent action, formatted as a list of ints, for more information check out
-        `primaite.environment.primaite_env.Primaite`
-    :type action: List[int]
-    :return: Whether the action is valid
-    :rtype: bool
-    """
-    action_r = transform_action_acl_readable(action)
-
-    action_decision = action_r[0]
-    action_permission = action_r[1]
-    action_source_id = action_r[2]
-    action_destination_id = action_r[3]
-
-    if action_decision == "NONE":
-        return False
-    if action_source_id == action_destination_id and action_source_id != "ANY" and action_destination_id != "ANY":
-        # ACL rule towards itself
-        return False
-    if action_permission == "DENY" and implicit_permission == RulePermissionType.DENY:
-        # DENY is unnecessary, we can create and delete allow rules instead
-        # No allow rule = blocked/DENY by feault. ALLOW overrides existing DENY.
-        return False
-    elif action_permission == "ALLOW" and implicit_permission == RulePermissionType.ALLOW:
-        # Same reason as above.
-        return False
-
-    return True
-
-
-def is_valid_acl_action_extra(action: List[int], implicit_permission: RulePermissionType) -> bool:
-    """
-    Harsher version of valid acl actions, does not allow action.
-
-    :param action: Agent action, formatted as a list of ints, for more information check out
-        `primaite.environment.primaite_env.Primaite`
-    :type action: List[int]
-    :return: Whether the action is valid
-    :rtype: bool
-    """
-    if is_valid_acl_action(action, implicit_permission=implicit_permission) is False:
-        return False
-
-    action_r = transform_action_acl_readable(action)
-    action_protocol = action_r[4]
-    action_port = action_r[5]
-
-    # Don't allow protocols or ports to be ANY
-    # in the future we might want to do the opposite, and only have ANY option for ports and service
-    if action_protocol == "ANY":
-        return False
-    if action_port == "ANY":
-        return False
-
-    return True
 
 
 def _transform_change_nodelink_readable(obs: np.ndarray) -> List[List[Union[str, int]]]:

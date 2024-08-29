@@ -1,14 +1,12 @@
 # © Crown-owned copyright 2023, Defence Science and Technology Laboratory UK
 """Defines node behaviour for Green PoL."""
-from typing import TYPE_CHECKING, Union
+from typing import Union
 
-from primaite.common.enums import NodePOLType
-
-if TYPE_CHECKING:
-    from primaite.common.enums import FileSystemState, HardwareState, NodePOLInitiator, SoftwareState
+from primaite.common.custom_typing import Serializable
+from primaite.common.enums import FileSystemState, HardwareState, NodePOLInitiator, NodePOLType, SoftwareState
 
 
-class NodeStateInstructionRed:
+class NodeStateInstructionRed(Serializable):
     """The Node State Instruction class."""
 
     def __init__(
@@ -51,6 +49,23 @@ class NodeStateInstructionRed:
         self.source_node_id: str = _pol_source_node_id
         self.source_node_service: str = _pol_source_node_service
         self.source_node_service_state = _pol_source_node_service_state
+
+    def serialize(self):
+        state_dict = {
+            "item_type": "RED_POL",
+            "id": self.id,
+            "start_step": self.start_step,
+            "end_step": self.end_step,
+            "nodeId": self.target_node_id,
+            "initiator": self.initiator.name,
+            "type": self.pol_type.name,
+            "protocol": self.service_name,
+            "state": self.state.name,
+            "sourceNodeId": self.source_node_id,
+            "sourceNodeService": self.source_node_service,
+            "sourceNodeServiceState": self.get_source_node_service_state,
+        }
+        return state_dict
 
     def get_start_step(self) -> int:
         """

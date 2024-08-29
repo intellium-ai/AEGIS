@@ -5,12 +5,16 @@ Information Exchange Requirements for APE.
 Used to represent an information flow from source to destination.
 """
 
+from primaite.common.custom_typing import Serializable
+from primaite.common.enums import IERType
 
-class IER(object):
+
+class IER(Serializable):
     """Information Exchange Requirement class."""
 
     def __init__(
         self,
+        _type: IERType,
         _id: str,
         _start_step: int,
         _end_step: int,
@@ -36,6 +40,7 @@ class IER(object):
         :param _mission_criticality: Criticality of this IER to the mission (0 none, 5 mission critical)
         :param _running: Indicates whether the IER is currently running
         """
+        self.type: IERType = _type
         self.id: str = _id
         self.start_step: int = _start_step
         self.end_step: int = _end_step
@@ -46,6 +51,22 @@ class IER(object):
         self.port: str = _port
         self.mission_criticality: int = _mission_criticality
         self.running: bool = _running
+
+    def serialize(self):
+        state_dict = {
+            "item_type": self.type.name,
+            "id": self.id,
+            "start_step": self.start_step,
+            "end_step": self.end_step,
+            "load": self.load,
+            "protocol": self.protocol,
+            "port": self.port,
+            "source": self.source_node_id,
+            "destination": self.dest_node_id,
+            "mission_criticality": self.mission_criticality,
+        }
+
+        return state_dict
 
     def get_id(self) -> str:
         """

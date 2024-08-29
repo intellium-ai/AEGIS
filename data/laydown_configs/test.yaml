@@ -1,0 +1,56 @@
+- item_type: PORTS
+  ports_list:
+  - port: '49'
+  - port: '66'
+- item_type: SERVICES
+  service_list:
+  - name: TCP_SQL
+  - name: TCP
+- file_system_state: GOOD
+  hardware_state: 'ON'
+  ip_address: 192.168.0.1
+  item_type: NODE
+  name: PC
+  node_class: ACTIVE
+  node_id: '1'
+  node_type: CCTV
+  priority: P1
+  services:
+  - name: TCP_SQL
+    port: 49
+    state: GOOD
+  software_state: GOOD
+- file_system_state: GOOD
+  hardware_state: 'ON'
+  ip_address: 192.168.0.2
+  item_type: NODE
+  name: PC
+  node_class: ACTIVE
+  node_id: '2'
+  node_type: SWITCH
+  priority: P1
+  services:
+  - name: TCP_SQL
+    port: 49
+    state: GOOD
+  software_state: GOOD
+- file_system_state: GOOD
+  hardware_state: 'ON'
+  ip_address: 192.168.0.3
+  item_type: NODE
+  name: PC
+  node_class: ACTIVE
+  node_id: '3'
+  node_type: COMPUTER
+  priority: P1
+  services:
+  - name: TCP_SQL
+    port: 49
+    state: GOOD
+  software_state: GOOD
+- bandwidth: 100000000
+  destination: '2'
+  id: '4'
+  item_type: LINK
+  name: LINK_1
+  source: '1'

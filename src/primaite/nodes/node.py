@@ -2,11 +2,12 @@
 """The base Node class."""
 from typing import Final
 
+from primaite.common.custom_typing import Serializable
 from primaite.common.enums import HardwareState, NodeType, Priority
 from primaite.config.training_config import TrainingConfig
 
 
-class Node:
+class Node(Serializable):
     """Node class."""
 
     def __init__(
@@ -41,6 +42,34 @@ class Node:
     def __repr__(self) -> str:
         """Returns the name of the node."""
         return self.name
+
+    def serialize(self):
+        """
+        - item_type: NODE
+            node_id: '2'
+            name: CLIENT_2
+            node_class: SERVICE
+            node_type: COMPUTER
+            priority: P5
+            hardware_state: 'ON'
+            ip_address: 192.168.10.12
+            software_state: GOOD
+            file_system_state: GOOD
+            services:
+                - name: TCP
+                port: '80'
+                state: GOOD
+        """
+        state_dict = {}
+        state_dict["item_type"] = "NODE"
+        state_dict["node_id"] = self.node_id
+        state_dict["name"] = self.name
+        state_dict["node_class"] = "NONE"
+        state_dict["node_type"] = self.node_type.name
+        state_dict["priority"] = self.priority.name
+        state_dict["hardware_state"] = self.hardware_state.name
+
+        return state_dict
 
     def turn_on(self) -> None:
         """Sets the node state to ON."""
@@ -77,3 +106,9 @@ class Node:
         if self.shutting_down_count <= 0:
             self.shutting_down_count = 0
             self.hardware_state = HardwareState.OFF
+
+    def is_working(self) -> bool:
+        if self.hardware_state.value > 1:
+            return False
+
+        return True

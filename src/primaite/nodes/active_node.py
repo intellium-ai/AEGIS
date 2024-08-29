@@ -206,3 +206,38 @@ class ActiveNode(Node):
         if self.booting_count <= 0:
             self.file_system_state_actual = FileSystemState.GOOD
             self.software_state = SoftwareState.GOOD
+
+    def is_working(self) -> bool:
+        if self.hardware_state.value > 1:
+            return False
+        if self.software_state.value > 1:
+            return False
+        if self.file_system_state_observed.value > 1:
+            return False
+
+        return super().is_working()
+
+    def serialize(self):
+        """
+        - item_type: NODE
+            node_id: '2'
+            name: CLIENT_2
+            node_class: SERVICE
+            node_type: COMPUTER
+            priority: P5
+            hardware_state: 'ON'
+            ip_address: 192.168.10.12
+            software_state: GOOD
+            file_system_state: GOOD
+            services:
+                - name: TCP
+                port: '80'
+                state: GOOD
+        """
+        state_dict = super().serialize()
+        state_dict["node_class"] = "ACTIVE"
+        state_dict["ip_address"] = self.ip_address
+        state_dict["software_state"] = self.software_state.name
+        state_dict["file_system_state"] = self.file_system_state_actual.name
+
+        return state_dict

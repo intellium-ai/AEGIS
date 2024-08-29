@@ -2,8 +2,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 from termcolor import colored
+
 from primaite.action import NodeAction
-from primaite.environment import Primaite
+from primaite.network import Network
 
 
 class AgentNodeAction(BaseModel):
@@ -16,9 +17,9 @@ class AgentNodeAction(BaseModel):
         "NONE", description="Service to apply action to. Only applicable if node_property is SERVICE."
     )
 
-    def to_node_action(self, env: Primaite) -> NodeAction:
+    def to_node_action(self, network: Network) -> NodeAction:
         return NodeAction.from_text(
-            env=env,
+            network=network,
             node_name=self.node_name,
             node_property=self.node_property,
             property_action=self.property_action,

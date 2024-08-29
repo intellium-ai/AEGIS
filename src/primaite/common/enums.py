@@ -4,6 +4,11 @@
 from enum import Enum, IntEnum
 
 
+class IERType(Enum):
+    RED_IER = "RED_IER"
+    GREEN_IER = "GREEN_IER"
+
+
 class NodeType(Enum):
     """Node type enumeration."""
 

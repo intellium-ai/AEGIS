@@ -6,9 +6,8 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import pandas as pd
 
-from primaite.environment.env_state import EnvironmentState
-from primaite.environment.primaite_env import Primaite
 from primaite.action import NodeAction
+from primaite.environment.primaite_env import Primaite
 
 HARDWARE_STATE: Dict[int, str] = {0: "none", 1: "on", 2: "off", 3: "resetting", 4: "shutting down", 5: "booting"}
 SOFTWARE_STATE: Dict[int, str] = {0: "none", 1: "good", 2: "patching", 3: "compromised", 4: "overwhelmed"}
@@ -21,44 +20,6 @@ TRAFFIC_LEVEL: Dict[int, str] = {
     3: "high traffic",
     4: "overwhelmed",
 }
-
-
-def network_connectivity_desc(env_state: EnvironmentState) -> str:
-    # List nodes
-    desc = ""
-    nodes = list(env_state.nodes.values())
-    nodes_df = pd.DataFrame({"Name": [n.name for n in nodes], "Type": [n.node_type.name for n in nodes]})
-    desc += "\nNodes:\n" + nodes_df.to_json(orient="records", indent=2)
-    links = list(env_state.links.values())
-    links_df = pd.DataFrame(
-        {
-            "Name": list(env_state.links.keys()),
-            "Source Node": [l.source_node_name for l in links],
-            "Destination Node": [l.dest_node_name for l in links],
-        }
-    )
-    desc += "\n\nLinks:\n" + links_df.to_json(orient="records", indent=2)
-
-    return desc
-
-
-def obs_view_full(env_state: EnvironmentState) -> str:
-    obs_str = ""
-    nodes = env_state.nodes_table.to_json(orient="records", indent=2)
-    obs_str += "\n\nNode Status:\n" + nodes
-    links = env_state.traffic_table.to_json(orient="records", indent=2)
-    obs_str += "\n\nTraffic Status:\n" + links + "\n\n"
-
-    return obs_str
-
-
-def obs_diff(env_state: EnvironmentState) -> str:
-    obs_diff = env_state.obs_diff(colors=False)
-    if obs_diff:
-        obs_str = "\n".join(obs_diff)
-    else:
-        obs_str = "NO CHANGE"
-    return obs_str
 
 
 def init_labels(num_services) -> List[str]:
@@ -119,31 +80,3 @@ def nodelink_to_understandable(
         readable_link_obs.append(list(link[num_services + 1 :]))
 
     return readable_node_obs, readable_link_obs
-
-
-def get_obs_act_history_str(env_history: List[EnvironmentState], env: Primaite, max_history: int = 20) -> str:
-    """Builds the observation history string used in LLM agent prompts. Uses the latest N in the history"""
-    # Build the history of actions
-    obs_act_history = "" if env_history else "NO OBSERVATION HISTORY"
-    history_list = []
-
-    for i, state in enumerate(env_history[1:]):
-        observed_changes = obs_diff(state)
-        action_id = state.action_id
-
-        if observed_changes != "" or action_id:
-            history_list.append(f"\nStep {i}:")
-
-            if observed_changes != "":
-                history_list[-1] += f"\n{observed_changes}"
-
-            if action_id is not None:
-                action = NodeAction.from_id(env=env, action_id=action_id)
-                action_verbose = action.verbose(colored=False)
-                history_list[-1] += f"\nAction: {action_verbose}\n"
-
-    obs_act_history += "".join(
-        history_list[-max_history:]
-    )  # Only show up to the last 20 obs act events to avoid cloggage
-
-    return obs_act_history
