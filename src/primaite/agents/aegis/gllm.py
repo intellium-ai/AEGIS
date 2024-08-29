@@ -97,7 +97,6 @@ class GLLM(torch.nn.Module):
         return loss
 
     def get_crossentropy_loss(self, gt_probs, gt_tokens, gllm_probs, gllm_tokens):
-        criterion = torch.nn.CrossEntropyLoss(reduction="none")
         padding_logit = torch.zeros([len(self.llm.tokenizer)])
         padding_logit[self.llm.tokenizer.pad_token_id] = (
             100  # Mock pad token of gt to 100% prob (it gets ignored anyway because of the mask)
@@ -107,8 +106,7 @@ class GLLM(torch.nn.Module):
         # Pad the shortest set of tensors if required
         batch_size = gllm_probs.shape[0]
         if gt_probs.shape[1] > gllm_probs.shape[1]:
-            # gt sequences are longer - pad gllm tokens
-            n_pads = gt_probs.shape[1] - gllm_probs.shape[1]
+            # gt sequences are longer - truncate the gt responses
             gt_probs = gt_probs[:, : gllm_probs.shape[1], :]
             gt_tokens = gt_tokens[:, : gllm_tokens.shape[1]]
 
@@ -123,8 +121,7 @@ class GLLM(torch.nn.Module):
             gt_tokens = torch.cat([gt_tokens, padding_tokens], dim=1)
 
         # Calculate the cross entropy loss - transpose the 1 and 2 dimensions because we want a loss value per token not per vocab
-        loss = criterion(gllm_probs.transpose(1, 2), gt_probs.transpose(1, 2))
-        loss = loss.mean()
+        loss = self.loss_fn(gllm_probs.transpose(1, 2), gt_probs.transpose(1, 2))
 
         return loss
 
@@ -136,7 +133,7 @@ def get_n_trainable_llm_parameters(model):
         all_model_params += param.numel()
         if param.requires_grad:
             trainable_model_params += param.numel()
-    return f"Trainable LLM parameters: {trainable_model_params}\nAll LLM parameters: {all_model_params}\nPercentage of trainable LLM parameters: {100 * trainable_model_params / all_model_params:.2f}%"
+    return f"Trainable LLM parameters: {trainable_model_params:,}\nAll LLM parameters: {all_model_params:,}\nPercentage of trainable LLM parameters: {trainable_model_params / all_model_params:.2%}%"
 
 
 def train_loop(
@@ -187,10 +184,10 @@ def train_loop(
             plt.title("Cross Entropy Loss")
             plt.ylabel("Loss")
             plt.xlabel("Epoch")
-            plt.savefig(f"./Trainings/{timestamp}/Training_Losses.png")
             print(f"{batch['gt_answers'][-1]}\n{txt_response}")
 
             if not os.path.exists(f"./Trainings/{timestamp}"):
                 os.makedirs(f"./Trainings/{timestamp}")
+            plt.savefig(f"./Trainings/{timestamp}/Training_Losses.png")
             torch.save(model.state_dict(), f"./Trainings/{timestamp}/{epoch+1}.pth")
     return gllm_responses

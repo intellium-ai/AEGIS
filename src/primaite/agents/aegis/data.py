@@ -10,7 +10,7 @@ class GLLMDataset(Dataset):
         self.graphs = graphs
         self.questions = questions
         self.gt_answers = [
-            answer + " " + llm.tokenizer.eos_token for answer in gt_answers
+            answer + llm.tokenizer.eos_token for answer in gt_answers
         ]  # mock add the eos token to the gt responses
         self.llm = llm
         self.gt_hidden_states = self._get_target_hidden_states(gt_answers)
@@ -39,8 +39,7 @@ class GLLMDataset(Dataset):
         gt_tokens = self.llm.tokenizer.batch_encode_plus(gt_answers, return_tensors="pt", padding=True)["input_ids"]
         batch_size = gt_tokens.shape[0]
         gt_probs = torch.zeros((batch_size, gt_tokens.shape[1], len(self.llm.tokenizer)), dtype=torch.float32)
-        for token_idx in range(gt_tokens.shape[1]):
-            gt_probs[:, token_idx, gt_tokens[:, token_idx]] = 1
+        gt_probs.scatter_(2, gt_tokens.unsqueeze(-1), 1.0)
         return gt_probs, gt_tokens
 
 
