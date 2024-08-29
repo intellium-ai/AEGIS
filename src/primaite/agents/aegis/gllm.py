@@ -7,12 +7,21 @@ from primaite.agents.aegis.modules.llm import LLM
 from primaite.agents.aegis.modules.ge import GraphEmbedding
 from torch.utils.data import DataLoader
 from primaite.agents.aegis.prompts import GLLM_PROMPT
+import matplotlib.pyplot as plt
+import os
+from datetime import datetime
 
 logging.getLogger().setLevel(logging.INFO)
 
 
 class GLLM(torch.nn.Module):
-    default_peft_config = LoraConfig(task_type="CAUSAL_LM", r=12, lora_dropout=0.1)
+    default_peft_config = LoraConfig(
+        task_type="CAUSAL_LM",
+        r=64,
+        lora_dropout=0.1,
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "wte"],
+        lora_alpha=32,
+    )
 
     def __init__(
         self,
@@ -100,29 +109,34 @@ class GLLM(torch.nn.Module):
         if gt_probs.shape[1] > gllm_probs.shape[1]:
             # gt sequences are longer - pad gllm tokens
             n_pads = gt_probs.shape[1] - gllm_probs.shape[1]
-            padding_logits = padding_logit.repeat(batch_size, n_pads, 1)
-
-            gllm_probs = torch.cat([gllm_probs, padding_logits], dim=1)
-
-            padding_tokens = padding_token.repeat(batch_size, n_pads)
-            gllm_tokens = torch.cat([gllm_tokens, padding_tokens], dim=1)
+            gt_probs = gt_probs[:, : gllm_probs.shape[1], :]
+            gt_tokens = gt_tokens[:, : gllm_tokens.shape[1]]
 
         elif gllm_probs.shape[1] > gt_probs.shape[1]:
-            # gllm sequences are longer - truncate them so she learns to shut up sooner.
-            gllm_probs = gllm_probs[:, : gt_probs.shape[1], :]
-            gllm_tokens = gllm_tokens[:, : gt_tokens.shape[1]]
+            # gllm sequences are longer - pad openai responses
+            n_pads = gllm_probs.shape[1] - gt_probs.shape[1]
+            padding_logits = padding_logit.repeat(batch_size, n_pads, 1)
 
-        # Create a mask so we know which indices to ignore in the loss output
-        gllm_mask = (gllm_tokens.view(batch_size, gllm_tokens.shape[1]) != self.llm.tokenizer.pad_token_id).float()
-        gt_mask = (gt_tokens.view(batch_size, gt_tokens.shape[1]) != self.llm.tokenizer.pad_token_id).float()
-        global_mask = gt_mask * gllm_mask
+            gt_probs = torch.cat([gt_probs, padding_logits], dim=1)
+
+            padding_tokens = padding_token.repeat(batch_size, n_pads)
+            gt_tokens = torch.cat([gt_tokens, padding_tokens], dim=1)
 
         # Calculate the cross entropy loss - transpose the 1 and 2 dimensions because we want a loss value per token not per vocab
         loss = criterion(gllm_probs.transpose(1, 2), gt_probs.transpose(1, 2))
-        loss = loss * global_mask
-        loss = loss.sum() / global_mask.sum()
+        loss = loss.mean()
 
         return loss
+
+
+def get_n_trainable_llm_parameters(model):
+    trainable_model_params = 0
+    all_model_params = 0
+    for _, param in model.named_parameters():
+        all_model_params += param.numel()
+        if param.requires_grad:
+            trainable_model_params += param.numel()
+    return f"Trainable LLM parameters: {trainable_model_params}\nAll LLM parameters: {all_model_params}\nPercentage of trainable LLM parameters: {100 * trainable_model_params / all_model_params:.2f}%"
 
 
 def train_loop(
@@ -131,9 +145,13 @@ def train_loop(
     network_desc: str,
     n_epochs: int = 10,
     loss_fn=Literal["cosine", "crossentropy"],
+    checkpoint_every: int = 10,
 ):
-    model.train(mode=True)
 
+    model.train(mode=True)
+    timestamp = datetime.now().strftime("%H-%M-%d-%m")
+    print(get_n_trainable_llm_parameters(model.llm))
+    train_losses = []
     for epoch in range(n_epochs):
         gllm_responses = []
 
@@ -143,7 +161,7 @@ def train_loop(
             gllm_prompts = model.build_prompts(questions=questions, network_desc=network_desc, model="gllm")
 
             gllm_tokens, gllm_logprobs, gllm_hidden_states = model(batch["graphs"], gllm_prompts)
-            txt_response = model.llm.tokenizer.batch_decode(gllm_tokens, skip_special_tokens=False)[0]
+            txt_response = model.llm.tokenizer.batch_decode(gllm_tokens, skip_special_tokens=False)[-1]
             gllm_responses.append(txt_response)
             if loss_fn == "cosine":
                 loss = model.get_cosine_embeddings_loss(batch["gt_hidden_states"], gllm_hidden_states)
@@ -163,7 +181,16 @@ def train_loop(
 
             model.optimizer.step()
 
-        print(f"Epoch {epoch} Loss:", loss.item())
-        print(f"{batch['gt_answers'][0]}\n{txt_response}")
+        if epoch % checkpoint_every == 0:
+            train_losses.append(loss.item())
+            plt.plot(train_losses, label="Train Loss")
+            plt.title("Cross Entropy Loss")
+            plt.ylabel("Loss")
+            plt.xlabel("Epoch")
+            plt.savefig(f"./Trainings/{timestamp}/Training_Losses.png")
+            print(f"{batch['gt_answers'][-1]}\n{txt_response}")
 
+            if not os.path.exists(f"./Trainings/{timestamp}"):
+                os.makedirs(f"./Trainings/{timestamp}")
+            torch.save(model.state_dict(), f"./Trainings/{timestamp}/{epoch+1}.pth")
     return gllm_responses

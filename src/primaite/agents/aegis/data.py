@@ -41,7 +41,6 @@ class GLLMDataset(Dataset):
         gt_probs = torch.zeros((batch_size, gt_tokens.shape[1], len(self.llm.tokenizer)), dtype=torch.float32)
         for token_idx in range(gt_tokens.shape[1]):
             gt_probs[:, token_idx, gt_tokens[:, token_idx]] = 1
-        print("target gt probs shape:", gt_probs.shape)
         return gt_probs, gt_tokens
 
 
