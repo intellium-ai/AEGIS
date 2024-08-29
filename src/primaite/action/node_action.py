@@ -1,17 +1,24 @@
+from dataclasses import dataclass
 from functools import cached_property
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from primaite.common.action_utils import create_node_action_dict
 from primaite.common.enums import NodeFileSystemAction, NodeHardwareAction, NodePropertyAction, NodeSoftwareAction
 from primaite.common.service import Service
-from primaite.environment import Primaite
+from primaite.network import Network
 from primaite.nodes import Node, ServiceNode
 
 
-# TODO - make sure action can actually be applied, given the current env_state
+def get_node_action_dict(network: Network):
+    return create_node_action_dict(len(network.nodes), len(network.service_names))
+
+
+@dataclass
+# TODO - make sure action can actually be applied, given the current network
 class NodeAction(BaseModel):
-    env: Primaite
+    network: Network
     node: Node | None = None
     node_property: NodePropertyAction = NodePropertyAction.NONE
     property_action: NodeHardwareAction | NodeSoftwareAction | NodeFileSystemAction | None = None
@@ -20,14 +27,14 @@ class NodeAction(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @classmethod
-    def from_numerical(cls, env: Primaite, node_id: int, property_id: int, action_id: int, service_id: int):
+    def from_numerical(cls, network: Network, node_id: int, property_id: int, action_id: int, service_id: int):
 
         if node_id == 0:
-            return NodeAction(env=env)
+            return NodeAction(network=network)
 
         else:
             try:
-                node = env.nodes[str(node_id)]
+                node = network.nodes_dict[str(node_id)]
             except:
                 raise ValueError(f"Provided node_id {node_id} could not be found in the environment specs.")
 
@@ -68,7 +75,7 @@ class NodeAction(BaseModel):
                 )
 
             try:
-                service_name = env.services_list[service_id]
+                service_name = network.service_names[service_id]
             except:
                 raise ValueError("Provided service_id {service_id} could not be found in the environment specs.")
             try:
@@ -79,7 +86,7 @@ class NodeAction(BaseModel):
             service = None
 
         return cls(
-            env=env,
+            network=network,
             node=node,
             node_property=node_property,
             property_action=property_action,
@@ -87,15 +94,17 @@ class NodeAction(BaseModel):
         )
 
     @classmethod
-    def from_text(cls, env: Primaite, node_name: str, node_property: str, property_action: str, service_name: str):
+    def from_text(cls, network: Network, node_name: str, node_property: str, property_action: str, service_name: str):
 
         # We don't do any validation here since it's all done in the from_numerical class method
         # We artificially induce invalid ids if we cannot resolve them from the textual representations given
         if node_name == "NONE":
             node_id = 0
         else:
+            INVALID_ID = len(network.nodes) + 10
             node_id = next(
-                (int(n.node_id) for k, n in env.nodes.items() if n.name == node_name), len(env.nodes.items()) + 10
+                (int(n.node_id) for k, n in network.nodes_dict.items() if n.name == node_name),
+                INVALID_ID,
             )
 
         try:
@@ -120,18 +129,19 @@ class NodeAction(BaseModel):
             action_id = -1
 
         try:
-            service_id = env.services_list.index(service_name)
+            service_id = network.service_names.index(service_name)
         except:
-            service_id = len(env.services_list) + 10
+            service_id = len(network.service_names) + 10
 
         return NodeAction.from_numerical(
-            env=env, node_id=node_id, property_id=property_id, action_id=action_id, service_id=service_id
+            network=network, node_id=node_id, property_id=property_id, action_id=action_id, service_id=service_id
         )
 
     @classmethod
-    def from_id(cls, env: Primaite, action_id: int):
-        numerical_repr = env.action_dict[action_id]
-        return NodeAction.from_numerical(env, *numerical_repr)
+    def from_id(cls, network: Network, action_id: int):
+        action_dict = get_node_action_dict(network)
+        numerical_repr = action_dict[action_id]
+        return NodeAction.from_numerical(network, *numerical_repr)
 
     @property
     def numerical(self) -> list[int]:
@@ -141,7 +151,7 @@ class NodeAction(BaseModel):
 
         action_id = 0 if self.property_action is None else self.property_action.value
 
-        service_id = 0 if self.service is None else self.env.services_list.index(self.service.name)
+        service_id = 0 if self.service is None else self.network.service_names.index(self.service.name)
 
         return [node_id, property_id, action_id, service_id]
 
@@ -155,7 +165,7 @@ class NodeAction(BaseModel):
 
     @cached_property
     def action_id(self) -> int:
-        action_dict = self.env.action_dict
+        action_dict = get_node_action_dict(self.network)
         try:
             id = next(k for k, v in action_dict.items() if v == self.numerical)
         except BaseException:

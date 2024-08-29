@@ -190,3 +190,33 @@ class ServiceNode(ActiveNode):
         if self.booting_count <= 0:
             for service in self.services.values():
                 service.software_state = SoftwareState.GOOD
+
+    def is_working(self) -> bool:
+        for s in list(self.services.values()):
+            if s.software_state.value > 1:
+                return False
+
+        return super().is_working()
+
+    def serialize(self):
+        """
+        - item_type: NODE
+            node_id: '2'
+            name: CLIENT_2
+            node_class: SERVICE
+            node_type: COMPUTER
+            priority: P5
+            hardware_state: 'ON'
+            ip_address: 192.168.10.12
+            software_state: GOOD
+            file_system_state: GOOD
+            services:
+                - name: TCP
+                port: '80'
+                state: GOOD
+        """
+        state_dict = super().serialize()
+        state_dict["node_class"] = "SERVICE"
+        state_dict["services"] = [s.serialize() for s in self.services.values()]
+
+        return state_dict

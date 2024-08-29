@@ -4,11 +4,12 @@ from __future__ import annotations
 import json
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Optional, Union, Type
 
 import numpy as np
-from stable_baselines3 import A2C, PPO
-from stable_baselines3.ppo import MlpPolicy as PPOMlp
+from stable_baselines3.a2c.a2c import A2C
+from stable_baselines3.ppo.ppo import PPO
+from stable_baselines3.ppo.policies import MlpPolicy as PPOMlp
 
 from primaite import getLogger
 from primaite.agents.agent_abc import AgentSessionABC
@@ -52,7 +53,7 @@ class SB3Agent(AgentSessionABC):
             msg = f"Expected SB3 agent_framework, " f"got {self._training_config.agent_framework}"
             _LOGGER.error(msg)
             raise ValueError(msg)
-        self._agent_class: Union[PPO, A2C]
+        self._agent_class: Union[Type[PPO], Type[A2C]]
         if self._training_config.agent_identifier == AgentIdentifier.PPO:
             self._agent_class = PPO
         elif self._training_config.agent_identifier == AgentIdentifier.A2C:
@@ -78,17 +79,20 @@ class SB3Agent(AgentSessionABC):
 
     def _setup(self) -> None:
         """Set up the SB3 Agent."""
+
+        _session_path: Path = Path(self.session_path)
+
         self._env = Primaite(
             training_config_path=self._training_config_path,
             lay_down_config_path=self._lay_down_config_path,
-            session_path=self.session_path,
+            session_path=_session_path,
             timestamp_str=self.timestamp_str,
             legacy_training_config=self.legacy_training_config,
             legacy_lay_down_config=self.legacy_lay_down_config,
         )
 
         # check if there is a zip file that needs to be loaded
-        load_file = next(self.session_path.rglob("*.zip"), None)
+        load_file = next(_session_path.rglob("*.zip"), None)
 
         if not load_file:
             # create a new env and agent
@@ -96,6 +100,7 @@ class SB3Agent(AgentSessionABC):
             self._agent = self._agent_class(
                 PPOMlp,
                 self._env,
+                learning_rate=0.001,
                 verbose=self.sb3_output_verbose_level,
                 n_steps=self._training_config.num_train_steps,
                 tensorboard_log=str(self._tensorboard_log_path),
@@ -103,7 +108,7 @@ class SB3Agent(AgentSessionABC):
             )
         else:
             # set env values from session metadata
-            with open(self.session_path / "session_metadata.json", "r") as file:
+            with open(_session_path / "session_metadata.json", "r") as file:
                 md_dict = json.load(file)
 
             # load environment values
@@ -122,7 +127,7 @@ class SB3Agent(AgentSessionABC):
 
             # set agent values
             self._agent.verbose = self.sb3_output_verbose_level
-            self._agent.tensorboard_log = self.session_path / "learning/tensorboard_logs"
+            self._agent.tensorboard_log = str(_session_path / "learning/tensorboard_logs")
 
         super()._setup()
 
