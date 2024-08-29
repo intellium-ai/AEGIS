@@ -16,7 +16,7 @@ from primaite.agents.llm.observation import get_obs_act_history_str, ObservedSta
 from primaite.agents.llm.prompting import AgentNodeAction
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
-from primaite.environment.primaite_env import Primaite=
+from primaite.environment.primaite_env import Primaite
 
 logging.getLogger().setLevel(logging.INFO)
 
