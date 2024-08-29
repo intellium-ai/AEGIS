@@ -49,7 +49,6 @@ class GLLM(torch.nn.Module):
         ).to(self.ge_device)
 
         self.optimizer = Adam(self.parameters(), lr=self.learning_rate)
-        self.loss_fn = torch.nn.CosineEmbeddingLoss()
 
     def forward(self, graph_batch, gllm_prompts) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """This should return the action integer"""
@@ -87,8 +86,8 @@ class GLLM(torch.nn.Module):
         return prompts
 
     def get_cosine_embeddings_loss(self, openai_hidden_states, gllm_hidden_states):
-
-        loss = self.loss_fn(
+        loss_fn = torch.nn.CosineEmbeddingLoss()
+        loss = loss_fn(
             openai_hidden_states.view(-1, self.llm.llm_embedding_size).to(gllm_hidden_states.device),
             gllm_hidden_states.view(-1, self.llm.llm_embedding_size),
             torch.ones(gllm_hidden_states.shape[0]).to(gllm_hidden_states.device),
@@ -97,6 +96,7 @@ class GLLM(torch.nn.Module):
         return loss
 
     def get_crossentropy_loss(self, gt_probs, gt_tokens, gllm_probs, gllm_tokens):
+        loss_fn = torch.nn.CrossEntropyLoss()
         padding_logit = torch.zeros([len(self.llm.tokenizer)])
         padding_logit[self.llm.tokenizer.pad_token_id] = (
             100  # Mock pad token of gt to 100% prob (it gets ignored anyway because of the mask)
@@ -121,7 +121,7 @@ class GLLM(torch.nn.Module):
             gt_tokens = torch.cat([gt_tokens, padding_tokens], dim=1)
 
         # Calculate the cross entropy loss - transpose the 1 and 2 dimensions because we want a loss value per token not per vocab
-        loss = self.loss_fn(gllm_probs.transpose(1, 2), gt_probs.transpose(1, 2))
+        loss = loss_fn(gllm_probs.transpose(1, 2), gt_probs.transpose(1, 2))
 
         return loss
 
@@ -141,7 +141,7 @@ def train_loop(
     dataloader: DataLoader,
     network_desc: str,
     n_epochs: int = 10,
-    loss_fn=Literal["cosine", "crossentropy"],
+    loss_fn: Literal["cosine", "crossentropy"] = "crossentropy",
     checkpoint_every: int = 10,
 ):
 
