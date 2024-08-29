@@ -32,8 +32,12 @@ class LLM(torch.nn.Module):
 
         self.model.gradient_checkpointing_enable()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="left"
+            model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
         )
+        # self.tokenizer.add_tokens(["<|pad|>"], special_tokens=True)
+        # self.tokenizer.pad_token = "<|pad|>"
+        # self.tokenizer.pad_token_id = self.tokenizer.encode("<|pad|>")[0]
+        # self.model.pretrained_model.resize_token_embeddings(len(self.tokenizer))
 
         # Figure out what tokens to allow in action generate calls
         self.numeric_token_ids, self.non_numeric_token_ids = self._get_filtered_tokenizer_vocab()
@@ -216,11 +220,13 @@ class LLM(torch.nn.Module):
 
                 else:
                     last_token_ids = None
-                token_ids, probs = self._filter_logits(logits=logits, prev_token_ids=last_token_ids)
+                token_ids, probs = self._filter_logits(
+                    logits=logits, prev_token_ids=last_token_ids
+                )  # WARNING: probs here is ONLY the top logprob
             else:
+                probs = logits.unsqueeze(1)
                 logits = torch.max(logits, dim=-1)
                 token_ids = logits.indices.unsqueeze(1)
-                probs = logits.values.unsqueeze(1)
 
             # For any sequence that is done already, just set their next token and prob to the last token and prob (the EOS token and prob)
             if len(eos_indices) != 0:
@@ -230,9 +236,10 @@ class LLM(torch.nn.Module):
                 for idx in eos_indices:
                     eos_mask[idx] = True
 
-                # For sequences that are done, set their next token and prob to their last token and prob
-                token_ids[eos_mask] = next_token_ids[eos_mask, -1].unsqueeze(1)
-                probs[eos_mask] = next_token_probs[eos_mask, -1].unsqueeze(1)
+                # For sequences that are done, set their next token and prob to pad token and last token prob
+                pad_token = torch.tensor([self.tokenizer.pad_token_id])
+                token_ids[eos_mask] = pad_token
+                probs[eos_mask] = next_token_probs[eos_mask, -1, :].unsqueeze(1)
 
             # Add the new tokens to the sequences
             next_token_ids = torch.cat([next_token_ids, token_ids.to("cpu")], dim=1)
