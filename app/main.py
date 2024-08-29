@@ -63,7 +63,6 @@ def init_primaite():
         training_config_path = training_config_root / state.training_file
 
         session = PrimaiteSession(training_config_path, lay_down_config_path)
-        session.setup()
 
         state.agent = session._agent_session
         env = state.agent._env
