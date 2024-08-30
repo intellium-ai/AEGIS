@@ -1012,6 +1012,7 @@ class Primaite(Env):
         Args:
             item: A config data item
         """
+        print(item)
         pol_id = item["id"]
         pol_start_step = item["start_step"]
         pol_end_step = item["end_step"]

@@ -3,20 +3,44 @@ from abc import ABC, abstractmethod
 # external imports
 import networkx as nx
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from pathlib import Path
 from matplotlib.colors import Normalize
 import matplotlib.pyplot as plt
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Load variables from .env file
+
 
 # internal imports
 from primaite.common.enums import HardwareState, NodeType, Priority, SoftwareState, FileSystemState, IERType, NodePOLType, NodePOLInitiator
 from primaite.common.service import Service
 from primaite.nodes import NodeUnion, NodeStateInstructionGreen, NodeStateInstructionRed, ActiveNode, PassiveNode, ServiceNode
+from primaite.agents.llm.observation import network_connectivity_desc
 from primaite.network.network import Network
 from primaite.links import Link
 from primaite.config.training_config import load
 from primaite.laydown.laydown import Laydown
 from primaite.pol.ier import IER
+from primaite.network import QUESTION_VARIATIONS
+
+# TODO: move this somewhere
+from openai import OpenAI
+
+class OpenAIClient:
+    def __init__(self, openai_api_key: str):
+        self.client = OpenAI(api_key=openai_api_key)
+
+    def generate(self, prompt: str, max_new_tokens: int = 1000) -> str:
+        messages = [{"role": "user", "content": prompt}]
+
+        response = self.client.chat.completions.create(
+            model="gpt-4o", messages=messages, max_tokens=max_new_tokens
+        )
+
+        return response.choices[0].message.content
+
 
 class BaseNetworkGenerator(ABC):
 
@@ -29,37 +53,187 @@ class GENINDNetworkGenerator(BaseNetworkGenerator): ...
 class NetworkGenerator:
 
     def __init__ (
-            self, 
-            training_config_path: str | Path,
-            graph_size: int = 30, 
-            random_seed: Optional[int] = None, 
+            self,
+            training_config_path: Union[str, Path],
+            graph_size: int = 30,
+            random_seed: Optional[int] = None,
             services: List[str] = ["HTTP", "SSH"],
-            ports:  List[str] = ["80", "22"] 
+            ports: List[str] = ["80", "22"],
+            question: Optional[str] = None
         ) -> None:
         """
-        Initialise the Node State Instruction for the red agent.
+        Initialize the NetworkGenerator.
 
-        :param training_config: Path to the training config.
-        :param graph_size: Number of nodes in the network
-        :param random_seed: The random seed. Defaults to None.
-        :param services: List of services (e.g. ["TCP"]).
-        :param ports: List of ports (e.g. ["80"]). Should correspond to `services`.
+        Args:
+            training_config_path (Union[str, Path]): Path to the training config file.
+            graph_size (int, optional): Number of nodes in the network. Defaults to 30.
+            random_seed (Optional[int], optional): The random seed. Defaults to None.
+            services (List[str], optional): List of services. Defaults to ["HTTP", "SSH"].
+            ports (List[str], optional): List of ports corresponding to services. Defaults to ["80", "22"].
+            
+
+        Returns:
+            None
         """
-        self.graph_size = graph_size
-        self.random_seed = random_seed
-        self.services = services
-        self.ports = ports
+        self.graph_size: int = graph_size
+        self.random_seed: Optional[int] = random_seed
+        self.services: List[str] = services
+        self.ports: List[str] = ports
         self.training_config = load(training_config_path)
+        self.iers: List[IER] = []
+        self.green_pols: List[NodeStateInstructionGreen] = []
+        self.red_pols: List[NodeStateInstructionRed] = []
 
-        self.graph = self.__generate_graph()
-        self.links_dict = self.__create_link_dict()
-        self.nodes_dict = self.__create_nodes_dict()
-        self.network = self.__create_network()
+        self.graph: nx.Graph = self.__generate_graph()
+        self.links_dict: Dict[str, Link] = self.__create_link_dict()
+        self.nodes_dict: Dict[str, NodeUnion] = self.__create_nodes_dict()
+        self.network: Network = self.__create_network()
+        self.network_description = network_connectivity_desc(self.network)
+        self.laydown: Optional[Laydown] = None
+        self.question: str = question if question else self.__choose_question()
+        self.target_answer: str = self.__ask_llm()
+
+    # --------------------- IERS
+    def generate_iers(self, count: int = 5) -> None:
+        for i in range(count):
+            edge = random.choice(list(self.links_dict.values()))
+            ier_type = random.choice(list(IERType))
+            start_step = random.randint(1, 127)
+            end_step = random.randint(start_step, 128)
+
+            self.add_ier(
+                _type=ier_type,
+                _id=str(i),
+                _start_step=start_step,
+                _end_step=end_step,
+                _load=10000,
+                _protocol="HTTP",
+                _port=["80"],
+                _source_node_id=edge.source_node_id,
+                _dest_node_id=edge.dest_node_id,
+                _mission_criticality=random.randint(0, 5)
+            )
+
+    def add_ier(self, **kwargs) -> None:
+        ier = IER(**kwargs)
+        self.iers.append(ier)
+
+    def remove_ier(self, index: int) -> None:
+        if 0 <= index < len(self.iers):
+            del self.iers[index]
+        else:
+            raise IndexError("IER index out of range")
+
+    def modify_ier(self, index: int, **kwargs) -> None:
+        if 0 <= index < len(self.iers):
+            ier = self.iers[index]
+            for key, value in kwargs.items():
+                if hasattr(ier, key):
+                    setattr(ier, key, value)
+        else:
+            raise IndexError("IER index out of range")
+        
+    def get_iers(self) -> List[IER]:
+        return self.iers
+    
+    def generate_laydown(self, laydown_save_path: Union[str, Path]) -> None:
+        self.laydown = Laydown(
+            initial_network=self.network,
+            iers=self.iers,
+            red_pols=self.red_pols,
+            green_pols=self.green_pols
+        )
+        self.laydown.save(laydown_save_path)
+    
+    # --------------------- POLS
+    def generate_green_pols(self, count: int = 5):
+        for i in range(count):
+            # choose random node
+            node = random.choice(list(self.nodes_dict.values()))
+
+            start_step = random.randint(1, 127)
+            node_pol_type = random.choice([i for i in list(NodePOLType) if i != NodePOLType.NONE])
+
+            match node_pol_type:
+                case NodePOLType.OPERATING:
+                    state = random.choice(list(HardwareState))
+                case NodePOLType.OS:
+                    state = random.choice(list(SoftwareState))
+                case NodePOLType.SERVICE:
+                    state = random.choice(list(SoftwareState))
+                case NodePOLType.FILE:
+                    state = random.choice(list(FileSystemState))
+                case _:
+                    state = None
+
+            self.add_green_pol(
+                _id=str(i),
+                _start_step=start_step,
+                _end_step=random.randint(start_step, 128),
+                _node_id=node.node_id,
+                _node_pol_type=node_pol_type,
+                _service_name="HTTP",
+                _state=state
+            )
+
+    def add_green_pol(self, **kwargs) -> None:
+        pol = NodeStateInstructionGreen(**kwargs)
+        self.green_pols.append(pol)
+
+    def get_green_pols(self) -> List[NodeStateInstructionGreen]:
+        return self.green_pols
+    
+    def generate_red_pols(self, count=5):
+        for i in range(count):
+            # get random edge
+            edge = random.choice(list(self.links_dict.values()))
+
+            start_step = random.randint(1, 127)
+            pol_type = random.choice([i for i in NodePOLType if i not in [NodePOLType.NONE, NodePOLType.FILE]])
+
+            match pol_type:
+                case NodePOLType.OPERATING:
+                    pol_state = random.choice(list(HardwareState))
+                case NodePOLType.OS:
+                    pol_state = random.choice(list(SoftwareState))
+                case NodePOLType.SERVICE:
+                    pol_state = random.choice(list(SoftwareState))
+                case NodePOLType.FILE:
+                    pol_state = random.choice(list(FileSystemState))
+                case _:
+                    pol_state = None
+
+            print("target nide id, ", edge.dest_node_id)
+
+            self.add_red_pol(
+                _id=str(i),
+                _start_step=start_step,
+                _end_step=random.randint(start_step, 128),
+                _target_node_id=edge.dest_node_id,
+                _pol_initiator=NodePOLInitiator.IER,
+                _pol_type=pol_type,
+                pol_protocol="HTTP",
+                _pol_state=pol_state,
+                _pol_source_node_id=edge.source_node_id,
+                _pol_source_node_service="HTTP",
+                _pol_source_node_service_state=pol_state
+            )
+
+    def add_red_pol(self, **kwargs) -> None:
+        pol = NodeStateInstructionRed(**kwargs)
+        self.red_pols.append(pol)
+
+    def get_red_pols(self) -> List[NodeStateInstructionRed]:
+        return self.red_pols
+
+    # --------------------- NETWORK CONFIG
 
     def __generate_graph(self):
 
         # generate graph from networkx
         G = nx.random_internet_as_graph(n=self.graph_size, seed=self.random_seed)
+
+
 
         # assigning node types
         for node in G.nodes():
@@ -223,89 +397,28 @@ class NetworkGenerator:
         edge_labels = {(u, v): index for index, (u, v, _) in enumerate(self.graph.edges(data=True))}
         nx.draw_networkx_edge_labels(self.graph, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
 
+    # --------------------- LLM ANSWER
+    @staticmethod
+    def __choose_question() -> str:
+        base_question = random.choice(list(QUESTION_VARIATIONS.keys()))
+        question = random.choice(QUESTION_VARIATIONS[base_question])
 
+        return question
 
-# # JACK's CODE (RIP SMIT)
-# class NetworkGenerator:
+    def __ask_llm(self):
 
-#     services: List[Service]
-#     ports: List[int]
-#     nodes: List[Node]
-#     links: List[Link]
-#     node_idx: int
+        load_dotenv() 
+        open_ai_key = os.getenv('OPEN_AI_KEY')
 
-#     def __init__(self) -> None:
-#         self.node_idx = 1
+        prompt = f"""
+            Your task is to answer the given question about a network using the provided context. Your answer should be very brief, it may even be as simple as a single word or number.
+            Question: {self.question}.
+            Context:
+            {self.network_description}
+        """
 
-#     def add_port_and_service(self, low=1, high=99) -> None:
+        openai = OpenAIClient(openai_api_key=open_ai_key)
 
-#         self.services.append(list(Service)[np.random.randint(low=0, high=len(list(Service)))])
-#         self.ports.append(np.random.randint(low=low, high=high))
+        answer = openai.generate(prompt=prompt)
 
-#     def add_node(self) -> None:
-#         self.nodes = []
-
-#         node_types = list(NodeType)
-#         node_type = node_types[np.random.randint(low=0, high=len(node_types))]
-
-#         sampler = random.sample
-
-#         node_service = NodeService(
-#             name=sampler(self.services, 1),
-#             port=self.ports[0],
-#             state=SoftwareState.GOOD,
-#         )
-
-#         node = Node(
-#             node_id=self.node_idx,
-#             name="PC",
-#             node_type=node_type,
-#             priority=Priority.P1,
-#             hardware_state=HardwareState.ON,
-#             ip_address=f"192.168.0.{self.node_idx}",
-#             software_state=SoftwareState.GOOD,
-#             file_system_state=FileSystemState.GOOD,
-#             services=[node_service],
-#         )
-
-#         self.nodes.append(node)
-
-#         self.node_idx += 1
-
-#     def _ports_to_dict(self) -> Dict[str, Any]:
-#         port_config = [{"port": f"{port}"} for port in self.ports]
-#         return {"item_type": "PORTS", "ports_list": port_config}
-
-#     def _services_to_dict(self) -> Dict[str, Any]:
-#         service_config = [{"name": service.value} for service in self.services]
-#         return {"item_type": "SERVICES", "service_list": service_config}
-
-#     def _nodes_to_dict(self) -> List[Dict[str, Any]]:
-#         return [node.dict() for node in self.nodes]
-
-#     def _links_to_dict(self) -> List[Dict[str, Any]]:
-#         return [link.dict() for link in self.links]
-
-#     def dict(self) -> List[Dict[str, Any]]:
-#         config = []
-#         config.append(self._ports_to_dict())
-#         config.append(self._services_to_dict())
-#         config.extend(self._nodes_to_dict())
-#         config.extend(self._links_to_dict())
-
-#         return config
-
-#     def save(self, path: str | Path = "test.yaml") -> None:
-
-#         with open(path, "w+") as f:
-#             yaml.safe_dump(self.dict(), f)
-
-
-# def main():
-
-#     network = NetworkGenerator()
-#     network.save("src/primaite/config/_package_data/lay_down/test.yaml")
-
-
-# if __name__ == "__main__":
-#     main()
+        return answer
