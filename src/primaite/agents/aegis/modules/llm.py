@@ -34,10 +34,7 @@ class LLM(torch.nn.Module):
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
         )
-        # self.tokenizer.add_tokens(["<|pad|>"], special_tokens=True)
-        # self.tokenizer.pad_token = "<|pad|>"
-        # self.tokenizer.pad_token_id = self.tokenizer.encode("<|pad|>")[0]
-        # self.model.pretrained_model.resize_token_embeddings(len(self.tokenizer))
+        print(self.get_n_trainable_llm_parameters())
 
         # Figure out what tokens to allow in action generate calls
         self.numeric_token_ids, self.non_numeric_token_ids = self._get_filtered_tokenizer_vocab()
@@ -52,6 +49,15 @@ class LLM(torch.nn.Module):
         self.pad_token_inputs = self.get_input_embeddings(prompts=[self.tokenizer.pad_token])
         # Hacky way to get the size of each tokens embedding - this helps us to align the GNN and LLM output shapes later.
         self.llm_embedding_size = self.get_input_embeddings(prompts=["hack"])["inputs_embeds"].shape[2]
+
+    def get_n_trainable_llm_parameters(self) -> str:
+        trainable_model_params = 0
+        all_model_params = 0
+        for _, param in self.named_parameters():
+            all_model_params += param.numel()
+            if param.requires_grad:
+                trainable_model_params += param.numel()
+        return f"Trainable LLM parameters: {trainable_model_params:,}\nAll LLM parameters: {all_model_params:,}\nPercentage of trainable LLM parameters: {trainable_model_params / all_model_params:.2%}%"
 
     def _get_filtered_tokenizer_vocab(self) -> Tuple[Dict[str, int], Dict[str, int]]:
 

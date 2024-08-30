@@ -5,6 +5,7 @@ from typing import Any, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from primaite.network import Network
 import torch
 from torch_geometric.data.batch import Batch
 
@@ -53,7 +54,7 @@ class GITAgent(AgentSessionABC):
             state_space=6,
             hidden_dim=128,
             n_graph_tokens=20,
-            ge_learning_rate=0.0001,
+            learning_rate=0.0001,
             ge_device="cuda:0",
         )
 
@@ -83,14 +84,10 @@ class GITAgent(AgentSessionABC):
         action_prompt, reasoning_prompt = self._build_prompt()
         llm_action_text, probs, reasoning_statement = self._agent(graph_batch, action_prompt, reasoning_prompt)
 
-        # try:
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
         action = self.get_node_action(text_output=llm_action_text)
-        action = action.to_node_action(network=self.obs_history[0].network).action_id
-        # except:
-        #     action = 0
-        #     logging.warning('An invalid action id was produced, falling back to 0')
-
+        network = Network.from_env(self._env)
+        action = action.to_node_action(network=network).action_id
         return action, probs
 
     def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]: ...
@@ -242,10 +239,12 @@ class GITAgent(AgentSessionABC):
 
                 action, probs = self._calculate_action(obs)
                 obs, rewards, done, _ = self._env.step(action=action)
-
+                # Clear up any gpu memory that may be holding onto tensors unnecessarily
+                torch.cuda.empty_cache()
                 self._agent.put_data((rewards, probs))
 
                 steps += 1
+                print(f"step {steps}")
                 rew += rewards
                 self._save_checkpoint()
 
