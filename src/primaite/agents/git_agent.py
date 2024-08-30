@@ -1,25 +1,21 @@
 import logging
 from dataclasses import dataclass
-from logging import Logger
 from pathlib import Path
 from typing import Any, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.distributions import Categorical
+from torch_geometric.data.batch import Batch
 
-from primaite import getLogger
-from primaite.action import NodeAction
+from primaite.agents.aegis.policies.git_policy import GITPolicy
+from primaite.agents.aegis.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.git.git_policy import GITPolicy
-from primaite.agents.git.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
 from primaite.agents.llm.observation import get_obs_act_history_str, ObservedState
 from primaite.agents.llm.prompting import AgentNodeAction
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite
-from primaite.network import Network
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -55,11 +51,9 @@ class GITAgent(AgentSessionABC):
 
         self._agent = GITPolicy(
             state_space=6,
-            action_space=100,
             hidden_dim=128,
             n_graph_tokens=20,
             ge_learning_rate=0.0001,
-            llm_device="cuda:0",
             ge_device="cuda:0",
         )
 
@@ -80,15 +74,14 @@ class GITAgent(AgentSessionABC):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
         state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(device)
+        state = Batch.from_data_list([state])
         return state
 
     def _calculate_action(self, obs) -> Tuple[int, torch.Tensor]:
 
-        data = self.create_graph(obs)
+        graph_batch = self.create_graph(obs)
         action_prompt, reasoning_prompt = self._build_prompt()
-        llm_action_text, probs, reasoning_statement = self._agent(
-            data.x, data.edge_index, action_prompt, reasoning_prompt
-        )
+        llm_action_text, probs, reasoning_statement = self._agent(graph_batch, action_prompt, reasoning_prompt)
 
         # try:
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
@@ -239,12 +232,17 @@ class GITAgent(AgentSessionABC):
         mean_rewards = []
         for ep in range(episodes):
             obs = self._env.reset()
+
+            # TEMP: Jump ahead because reward is 0 at the beginning for a while
+            # for _ in range(20):
+            #     obs, rewards, done, _ = self._env.step(0)
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
 
                 action, probs = self._calculate_action(obs)
                 obs, rewards, done, _ = self._env.step(action=action)
+
                 self._agent.put_data((rewards, probs))
 
                 steps += 1
