@@ -238,6 +238,7 @@ class GITAgent(AgentSessionABC):
             while steps < time_steps and not done:
 
                 action, probs = self._calculate_action(obs)
+
                 obs, rewards, done, _ = self._env.step(action=action)
                 # Clear up any gpu memory that may be holding onto tensors unnecessarily
                 torch.cuda.empty_cache()

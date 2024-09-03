@@ -15,6 +15,7 @@ from text_generation.types import Grammar, GrammarType
 
 from primaite import getLogger
 from primaite.action import NodeAction
+from fireworks.client import Fireworks
 from primaite.agents.agent_abc import AgentSessionABC
 from primaite.agents.llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
 from primaite.agents.llm.prompting import (
@@ -34,74 +35,52 @@ T = TypeVar("T", bound=BaseModel)
 MAX_PROMPT_OBS_HISTORY = 20
 
 
-def format_llama_prompt(system: str, messages: List[Tuple[Literal["user", "assistant"], str]]) -> str:
-    prompt = "<|begin_of_text|>"
+class FireworksLLM:
+    def __init__(self, api_key, model="accounts/fireworks/models/llama-v3p1-8b-instruct") -> None:
+        self.client = Fireworks(api_key=api_key)
+        self.model = model
 
-    # system prompt
-    prompt += "<|start_header_id|>system<|end_header_id|>\n\n"
-    prompt += system
-    prompt += "<|eot_id|>"
-
-    # prev messages
-    for role, msg in messages:
-        prompt += f"<|start_header_id|>{role}<|end_header_id|>\n\n"
-        prompt += msg
-        prompt += "<|eot_id|>"
-
-    # prompt llm to answer
-    prompt += "<|start_header_id|>assistant<|end_header_id|>"
-
-    return prompt
-
-
-class LLM:
-    def __init__(self, base_url: str, timeout: int = 60) -> None:
-        self.client = Client(base_url=base_url, timeout=timeout)
-
-    def generate(self, prompt: str, repetition_penalty: Optional[float] = None, max_new_tokens: int = 1024) -> str:
-        response = self.client.generate(
-            prompt=prompt, max_new_tokens=max_new_tokens, repetition_penalty=repetition_penalty
+    def generate(self, system, prompt, max_new_tokens=1024, repetition_penalty: float = 1.1):
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        response = self.client.chat.completions.create(
+            model=self.model,
+            prompt_or_messages=messages,
+            max_tokens=max_new_tokens,
+            repetition_penalty=repetition_penalty,
         )
-        return response.generated_text
+        return response.choices[0].message.content
 
     def generate_model(
         self,
-        prompt: str,
-        model: Type[T],
-        repetition_penalty: Optional[float] = None,
-        max_new_tokens: int = 1024,
+        system,
+        prompt,
+        grammar,
+        max_new_tokens=1024,
         new_literals: Optional[Dict[str, List]] = None,
-    ) -> T:
-
-        model_schema = model.model_json_schema()
+        repetition_penalty: float = 1.1,
+    ):
+        model_schema = grammar.model_json_schema()
         if new_literals:
             # For each set of literals (referred to as enums) passed, add to the schema for the respective property.
             for prop, enum in new_literals.items():
                 model_schema["properties"][prop]["enum"] = enum
 
-        # Convert json schema to regex to preserve property order during generation
-        model_json = json.dumps(model_schema, indent=2)
-        model_regex = build_regex_from_schema(model_json)
-
-        # Generate response for regex
-        response = self.client.generate(
-            prompt=prompt,
-            grammar=Grammar(type=GrammarType.Regex, value=model_regex),
-            max_new_tokens=max_new_tokens,
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
+        response = self.client.chat.completions.create(
+            model=self.model,
+            prompt_or_messages=messages,
+            max_tokens=max_new_tokens,
+            response_format={"type": "json_object", "schema": model_schema},
             repetition_penalty=repetition_penalty,
-        ).generated_text
-
-        try:
-            # Parse response
-            response_model = model(**json.loads(response))
-            _LOGGER.info(f"{colored('Action', 'green')}: {response_model}")
-        except json.JSONDecodeError as e:
-            # Grammar didn't work
-            raise LLMGrammarError(f"LLM did not produce valid grammar JSON schema: {e}. Generated: {response}")
-        except Exception as e:
-            raise Exception(e)
-
-        return response_model
+        )
+        response = json.loads(response.choices[0].message.content)
+        return grammar(**response)
 
     def _build_reasoning_prompt(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
         prompt = ""
@@ -128,8 +107,6 @@ class LLM:
             current_obs_diff=obs_state.changes_str,
             action_info=ACTION_INFO.format(service_names=service_names),
         )
-        messages: List[Tuple[Literal["user", "assistant"], str]] = [("user", prompt)]
-        prompt = format_llama_prompt(system=SYSTEM_MSG, messages=messages)
 
         return prompt
 
@@ -155,9 +132,6 @@ class LLM:
             current_obs_diff=obs_state.changes_str,
             action_info=ACTION_INFO.format(service_names=service_names),
         )
-        messages = [("user", prompt)]
-        messages: List[Tuple[Literal["user", "assistant"], str]] = [("user", prompt)]
-        prompt = format_llama_prompt(SYSTEM_MSG, messages)
 
         return prompt
 
@@ -168,9 +142,10 @@ class LLM:
         network = obs_state.network
         agent_reason_select = self.generate_model(
             prompt=prompt,
-            model=AgentReasoningNodeSelection,
-            repetition_penalty=1.1,
+            system=SYSTEM_MSG,
+            grammar=AgentReasoningNodeSelection,
             new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
+            repetition_penalty=1.1,
         )
         reasoning = agent_reason_select.reasoning
         node_selection = agent_reason_select.node_name
@@ -181,11 +156,13 @@ class LLM:
             prompt = self._build_action_prompt(
                 obs_state=obs_state, obs_history=obs_history, reasoning=reasoning, node_name=node_selection
             )
+            # rep penalty 1.1
             agent_action = self.generate_model(
                 prompt=prompt,
-                model=AgentNodeAction,
-                repetition_penalty=1.1,
+                system=SYSTEM_MSG,
+                grammar=AgentNodeAction,
                 new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
+                repetition_penalty=1.1,
             )
             try:
                 action = agent_action.to_node_action(network=network)
@@ -226,7 +203,7 @@ class LLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = LLM(base_url="http://192.168.0.148:58084", timeout=120)
+        self._agent = FireworksLLM(api_key="get your own")
 
         # Keep track of env history
         self.obs_history = [ObservedState.from_env(self._env)]

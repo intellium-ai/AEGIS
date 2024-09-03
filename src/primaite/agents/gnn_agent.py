@@ -75,6 +75,7 @@ class GNNAgent(AgentSessionABC):
 
         :param kwargs: Any agent-specific key-word args to be passed.
         """
+        avg_ep_rewards = []
         time_steps = self._training_config.num_eval_steps
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
@@ -92,9 +93,11 @@ class GNNAgent(AgentSessionABC):
                 steps += 1
                 rew += rewards
 
-        self._env._write_av_reward_per_episode()  # noqa
+        # self._env._write_av_reward_per_episode()  # noqa
+        avg_ep_rewards.append(self._env.average_reward)
         self._env.close()
         super().evaluate()
+        return avg_ep_rewards
 
     def learn(self, **kwargs):
         time_steps = self._training_config.num_train_steps

@@ -61,9 +61,9 @@ def network_connectivity_desc(network: Network) -> str:
 
     links_df = pd.DataFrame(
         {
-            "Name": [l.name for l in links.values()],
-            "Source Node": [l.source_node_name for l in links.values()],
-            "Destination Node": [l.dest_node_name for l in links.values()],
+            "Name": [l.name for l in links],
+            "Source Node": [l.source_node_name for l in links],
+            "Destination Node": [l.dest_node_name for l in links],
         }
     )
     desc += "\n\nLinks:\n" + links_df.to_json(orient="records", indent=2)
