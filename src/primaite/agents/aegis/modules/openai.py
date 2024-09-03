@@ -157,3 +157,22 @@ class OpenAIClient():
         except json.JSONDecodeError:
             raise Exception("Unable to parse LLM output as the LLM likely generated incomplete JSON")
         return model(**arguments)
+    
+    def generate_prompt_response(
+        self,
+        prompt_template: str,
+        grammar: Type[T],
+        **kwargs
+    ) -> T:
+        """
+        Generate a response based on a given prompt template and grammar.
+
+        :param prompt_template: The template string for the prompt
+        :param grammar: The grammar class to use for parsing the response
+        :param kwargs: Additional keyword arguments to format the prompt template
+        :return: Parsed response according to the specified grammar
+        """
+        prompt = prompt_template.format(**kwargs)
+        return self.generate_model(prompt=prompt, grammar=grammar)
+    
+    

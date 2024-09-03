@@ -3,8 +3,8 @@ from enum import Enum
 from pathlib import Path
 
 import streamlit as st
-from components import Simulation
 from streamlit import session_state as state
+from primaite.common.simulation import Simulation
 
 
 class EvalStage(Enum):

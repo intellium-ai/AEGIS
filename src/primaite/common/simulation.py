@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from components.env_state import EnvironmentState
-
 from primaite.agents import AgentSessionABC
+from primaite.common.env_state import EnvironmentState
 from primaite.primaite_session import PrimaiteSession
 
 
