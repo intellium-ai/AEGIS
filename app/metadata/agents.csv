@@ -1,0 +1,11 @@
+id,name,label,is_trainable,description
+1,git_agent,GIT,true,Lorem ya mom
+2,gnn_agent,GNN,true,Errhhhhhhmm
+4,hardcoded,Hardcoded,false,The plan is also already in place
+5,rllib,Ray RLlib,true,Reinforce me baby
+6,sb3,Stable Baseline 3,true,
+7,llm,LLM,false,
+8,trainable_llm,LLM (trainable),true,
+9,random,Random,false,
+10,do_nothing,Do Nothing,false,
+11,random_card,Random Card,false,
