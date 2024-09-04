@@ -14,12 +14,13 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
+welcome_pg = st.Page("welcome.py", title="Welcome", icon="👋")
 eval_pg = st.Page("evaluation.py", title="Evaluation", icon="🦧")
 training_pg = st.Page("training.py", title="Training", icon="🐒")
 analyse_py = st.Page("analyse.py", title="Analyse", icon="👓")
 
 # i dont really want analyse_py in the navbar
-main_pg = st.navigation([eval_pg, training_pg, analyse_py])
+main_pg = st.navigation([welcome_pg, eval_pg, training_pg, analyse_py])
 
 st.set_page_config(page_title="PrimAITE", page_icon="🦍", layout="wide")
 
