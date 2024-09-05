@@ -27,6 +27,25 @@ from primaite.pol.ier import IER
 
 load_dotenv()
 
+# assigning colours to nodes
+NODE_TYPE_MAP = {
+    NodeType.CCTV: {"colour": "#FFB3FF"},     # Pastel Magenta
+    NodeType.SWITCH: {"colour": "#A3C1E0"},   # Pastel Blue
+    NodeType.COMPUTER: {"colour": "#CFCFCF"}, # Pastel Gray
+    NodeType.LINK: {"colour": "#77DD77"},     # Pastel Green
+    NodeType.MONITOR: {"colour": "#FFFFB3"},  # Pastel Yellow
+    NodeType.PRINTER: {"colour": "#FFD1A3"},  # Pastel Orange
+    NodeType.LOP: {"colour": "#D1B3FF"},      # Pastel Purple
+    NodeType.RTU: {"colour": "#D2B48C"},      # Pastel Brown (Tan)
+    NodeType.ACTUATOR: {"colour": "#FFB6C1"}, # Pastel Pink
+    NodeType.SERVER: {"colour": "#B3FFFF"},   # Pastel Cyan
+}
+
+SERVICE_TO_PORT_MAP = {
+    "HTTP": "80",
+    "SSH": "22",
+    "FTP": "21"
+}
 class NetworkGenerator:
 
     def __init__ (
@@ -75,6 +94,9 @@ class NetworkGenerator:
         self.target_action: AgentNodeAction | None = None
         self.simulation: Simulation | None = None
         self.graph_as_red_and_blue: plt.Figure | None = None
+
+        if self.random_seed is not None:
+            random.seed(self.random_seed)
 
 
     # --------------------- NETWORK CONFIG
@@ -208,25 +230,11 @@ class NetworkGenerator:
             graph=self.graph
         )
 
-    def show_network(self) -> None:
+    def show_network(self) -> plt.Figure:
 
         # NOTE: not sure the color of links changes with traffic
 
         pos = nx.spring_layout(self.graph, seed=self.random_seed)
-
-        # assigning colours to nodes
-        NODE_TYPE_MAP = {
-            NodeType.CCTV: {"colour": "#FFB3FF"},     # Pastel Magenta
-            NodeType.SWITCH: {"colour": "#A3C1E0"},   # Pastel Blue
-            NodeType.COMPUTER: {"colour": "#CFCFCF"}, # Pastel Gray
-            NodeType.LINK: {"colour": "#77DD77"},     # Pastel Green
-            NodeType.MONITOR: {"colour": "#FFFFB3"},  # Pastel Yellow
-            NodeType.PRINTER: {"colour": "#FFD1A3"},  # Pastel Orange
-            NodeType.LOP: {"colour": "#D1B3FF"},      # Pastel Purple
-            NodeType.RTU: {"colour": "#D2B48C"},      # Pastel Brown (Tan)
-            NodeType.ACTUATOR: {"colour": "#FFB6C1"}, # Pastel Pink
-            NodeType.SERVER: {"colour": "#B3FFFF"},   # Pastel Cyan
-        }
 
         node_colors = [NODE_TYPE_MAP[v['type']]["colour"] for _, v in self.graph.nodes(data=True)]
 
@@ -242,6 +250,9 @@ class NetworkGenerator:
         norm = Normalize(vmin=min(edge_traffic_levels), vmax=max(edge_traffic_levels))
         edge_colors_normalized = [norm(level) for level in edge_traffic_levels]
 
+        # Create a new figure
+        fig, ax = plt.subplots(figsize=(12, 8))
+
         # draw the network with edges colored by traffic level
         nx.draw_networkx(
             self.graph,
@@ -250,14 +261,18 @@ class NetworkGenerator:
             with_labels=False,
             edge_color=edge_colors_normalized,
             edge_cmap=plt.cm.hot, 
-            edge_vmax=1.0, 
+            edge_vmax=1.0,
+            ax=ax
         )
 
         pos_higher = {k: (v[0], v[1]) for k, v in pos.items()}
-        nx.draw_networkx_labels(self.graph, pos=pos_higher, font_size=5, font_color="black")
+        nx.draw_networkx_labels(self.graph, pos=pos_higher, font_size=5, font_color="black", ax=ax)
 
         edge_labels = {(u, v): index for index, (u, v, _) in enumerate(self.graph.edges(data=True))}
-        nx.draw_networkx_edge_labels(self.graph, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black")
+        nx.draw_networkx_edge_labels(self.graph, pos=pos, font_size=4, edge_labels=edge_labels, font_color="black", ax=ax)
+
+        # Return the figure
+        return fig
 
 
     # --------------------- IERS
@@ -292,15 +307,17 @@ class NetworkGenerator:
         else:
             raise IndexError("IER index out of range")
         
-    def generate_laydown(self, laydown_save_path: str | Path) -> None:
+    def generate_laydown(self, laydown_save_path: str | Path | None) -> None:
         self.laydown = Laydown(
             initial_network=self.network,
             iers=self.iers,
             red_pols=self.red_pols,
             green_pols=self.green_pols
         )
-        self.laydown_save_path = laydown_save_path
-        self.laydown.save(laydown_save_path)
+
+        if laydown_save_path:
+            self.laydown_save_path = laydown_save_path
+            self.laydown.save(laydown_save_path)
     
     # --------------------- POLS
     def generate_green_pols(self, count: int = 5) -> None:
@@ -418,7 +435,7 @@ class NetworkGenerator:
         state.x = torch.tensor(obs[:_network.number_of_nodes(), 1:], dtype=torch.float32).to('cpu')
         return state
     
-    def run_end_to_end(self, laydown_save_path: str | Path) -> Data:
+    def run_end_to_end(self, laydown_save_path: str | Path | None) -> Data:
         # add iers
         self.generate_iers()
         self.generate_green_pols()
