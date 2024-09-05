@@ -4,6 +4,8 @@ from torch import nn
 from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge
 from torch_geometric.data.batch import Batch
 import logging
+import json
+import os
 
 
 logging.getLogger().setLevel(logging.INFO)
@@ -44,3 +46,26 @@ class GraphEmbedding(nn.Module):
         x = self.linear(x)
         x = x.view(graph_batch.batch_size, self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
         return x
+    
+    def save(self, path: str) -> None:
+        # Save init arguments
+        init_kwargs = {
+            'in_channels' : self.gat.in_channels,
+            'output_dim' : self.output_dim,
+            'hidden_dim' : self.gat.out_channels,
+            'n_tokens' : self.n_tokens,
+            'device' : self.device,
+            'n_gat_layers' : self.n_gat_layers
+        }
+
+        json.dump(init_kwargs, open(os.path.join(path, 'ge_init_kwargs.json'), 'w'))
+
+        # Save model
+        torch.save(self.state_dict(), os.path.join(path, 'ge.pt'))
+
+    @classmethod
+    def load(cls, path: str):
+        init_kwargs = json.load(open(os.path.join(path, 'ge_init_kwargs.json')))
+        ge = cls(**init_kwargs)
+        ge.load_state_dict(torch.load(os.path.join(path, 'ge.pt')))
+        return ge.to(ge.device)
