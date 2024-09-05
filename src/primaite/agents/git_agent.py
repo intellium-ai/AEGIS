@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from torch_geometric.data.batch import Batch
+from torch.utils.tensorboard import SummaryWriter
 
 from primaite.agents.aegis.policies.git_policy import GITPolicy
 from primaite.agents.aegis.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
@@ -71,6 +72,11 @@ class GITAgent(AgentSessionABC):
 
         self._can_learn = True
         self._can_evaluate = True
+
+        self.optimiser = torch.optim.Adam(self._agent.parameters(), maximize=True, lr=0.01)
+        if save_path is not None:
+            self.optimiser.load_state_dict(torch.load(os.path.join(save_path, 'git_agent_optim_state.pt')))
+        self.writer = SummaryWriter(flush_secs=15)
 
     def _save_checkpoint(self) -> None:
         pass
