@@ -70,11 +70,10 @@ class GITPolicy(nn.Module):
         inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"],
-            attention_mask=inputs["attention_mask"],
+            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'),
+            attention_mask=inputs["attention_mask"].to('cuda:0'),
             grad=False,
             restrict_output=False,
-            max_new_tokens=15,
         )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
@@ -84,12 +83,12 @@ class GITPolicy(nn.Module):
 
         # 4.0 - Generate the next action (5 tokens required per action)
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"], attention_mask=inputs["attention_mask"], max_new_tokens=5
+            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'), attention_mask=inputs["attention_mask"].to('cuda:0'), max_new_tokens=5
         )
         response = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
-        return response, probs.squeeze(), reasoning_statement
+        return (response, probs.squeeze(), reasoning_statement, (inputs["inputs_embeds"].detach(), token_ids.squeeze().detach()))
 
     def save(self, path: str) -> None:
         self.llm.save(path)
