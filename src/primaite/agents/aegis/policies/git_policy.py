@@ -27,29 +27,35 @@ class GITPolicy(nn.Module):
         self,
         state_space: int = None,
         hidden_dim: int = None,
-        learning_rate: float = 0.005,
-        ge_device: str = "cuda:1",
+        ge_device: str = "cuda:0",
         n_graph_tokens: int = 10,
         lora_config: LoraConfig = default_peft_config,
+        **kwargs
     ):
-
+        
         super(GITPolicy, self).__init__()
         self.ge_device = ge_device
 
         # space size check
-        assert state_space is not None, "None state_space input: state_space should be assigned."
-        if hidden_dim is None:
+        assert not (state_space is None and 'ge' not in kwargs.keys()), "None state_space input: state_space should be assigned."
+        if hidden_dim is None and 'ge' not in kwargs.keys():
             hidden_dim = state_space * 2
 
-        self.llm = LLM(peft_config=lora_config)
+        if 'llm' in kwargs:
+            self.llm = kwargs['llm']
+        else:
+            self.llm = LLM(peft_config=lora_config)
 
-        self.ge = GraphEmbedding(
-            in_channels=state_space,
-            hidden_dim=hidden_dim,
-            output_dim=self.llm.llm_embedding_size,
-            device=ge_device,
-            n_tokens=n_graph_tokens,
-        ).to(self.ge_device)
+        if 'ge' in kwargs:
+            self.ge = kwargs['ge']
+        else:
+            self.ge = GraphEmbedding(
+                in_channels=state_space,
+                hidden_dim=hidden_dim,
+                output_dim=self.llm.llm_embedding_size,
+                device=ge_device,
+                n_tokens=n_graph_tokens,
+            ).to(self.ge_device)
 
     def forward(self, graph_batch, action_prompt, reasoning_prompt):
         """This should return the action integer"""
@@ -84,3 +90,14 @@ class GITPolicy(nn.Module):
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
         return response, probs.squeeze(), reasoning_statement
+
+    def save(self, path: str) -> None:
+        self.llm.save(path)
+        self.ge.save(path)
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        return cls(
+            llm=LLM.load(path), 
+            ge=GraphEmbedding.load(path)
+        )

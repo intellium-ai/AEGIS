@@ -2,13 +2,13 @@ import torch
 from transformers import BitsAndBytesConfig, AutoTokenizer
 from trl import AutoModelForCausalLMWithValueHead
 from peft.tuners.lora import LoraConfig
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Generator, Optional
 
 
 class LLM(torch.nn.Module):
     def __init__(
         self,
-        model_name="HuggingFaceTB/SmolLM-1.7B-Instruct",
+        model_name_or_path = "HuggingFaceTB/SmolLM-1.7B-Instruct",
         peft_config: LoraConfig = None,
     ):
         super().__init__()
@@ -23,7 +23,7 @@ class LLM(torch.nn.Module):
         self.peft_config = peft_config
         # Use accelerate device mapping to distribute the model across all available cuda devices.
         self.model: AutoModelForCausalLMWithValueHead = AutoModelForCausalLMWithValueHead.from_pretrained(
-            model_name,
+            model_name_or_path,
             torch_dtype=torch.float16,
             device_map="auto",
             quantization_config=self.bnb_config,
@@ -32,7 +32,7 @@ class LLM(torch.nn.Module):
 
         self.model.gradient_checkpointing_enable()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
+            model_name_or_path, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
         )
         print(self.get_n_trainable_llm_parameters())
 
@@ -360,3 +360,15 @@ class LLM(torch.nn.Module):
         else:
             with torch.no_grad():
                 return self._generate_last_state(**kwargs)
+
+    def save(self, path: str) -> None:
+        # Save Tokenizer
+        self.tokenizer.init_kwargs.pop('torch_dtype', None)
+        self.tokenizer.save_pretrained(path)
+
+        # Save LLM
+        self.model.save_pretrained(path)
+
+    @classmethod
+    def load(cls, path: str):
+        return cls(path)

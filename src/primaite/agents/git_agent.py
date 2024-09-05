@@ -2,10 +2,12 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Tuple
+import time
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from primaite.network import Network
+from tqdm import tqdm
 import torch
 from torch_geometric.data.batch import Batch
 
@@ -17,6 +19,7 @@ from primaite.agents.llm.prompting import AgentNodeAction
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite
+from primaite.network import Network
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -28,18 +31,18 @@ class GITAgent(AgentSessionABC):
     @dataclass
     class ActionInfo(AgentSessionABC.ActionInfo): ...
 
-    def __init__(self, training_config_path, lay_down_config_path):
+    def __init__(self, training_config_path, lay_down_config_path, save_path: str = None):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.GIT
 
-        self._setup()
+        self._setup(save_path=save_path)
 
         # Set the node and service maps for prompt - llm - action conversion
         self.node_mapping = self._env.nodes
         self.service_mapping = {key + 1: value for key, value in enumerate(self._env.services_list)}
 
-    def _setup(self):
+    def _setup(self, save_path: str = None):
         if not isinstance(self.session_path, Path):
             self.session_path = Path(self.session_path)
 
@@ -50,13 +53,15 @@ class GITAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GITPolicy(
-            state_space=6,
-            hidden_dim=128,
-            n_graph_tokens=20,
-            learning_rate=0.0001,
-            ge_device="cuda:0",
-        )
+        if save_path is not None:
+            self._agent = GITPolicy.load(save_path)
+        else:
+            self._agent = GITPolicy(
+                state_space=6,
+                hidden_dim=128,
+                n_graph_tokens=20,
+                ge_device="cuda:0",
+            )
 
         logging.info(self._agent)
 
@@ -262,29 +267,16 @@ class GITAgent(AgentSessionABC):
 
         self._plot_av_reward_per_episode(True)
 
-    def _save_training_fig(self, losses, mean_rewards):
-        plt.plot(losses, label="Loss")
-        # plt.plot(mean_reward, label='Avg Reward')
-        plt.xlabel("Episode #")
-        plt.ylabel("Loss")
-        plt.savefig("./loss.png")
-
-        plt.close()
-        plt.plot(mean_rewards, label="Avg Reward")
-        plt.xlabel("Episode #")
-        plt.ylabel("Avg Reward")
-        plt.savefig("./avg_reward.png")
-        plt.close()
-
     def _get_latest_checkpoint(self):
         pass
 
     @classmethod
     def load(cls, path):
-        pass
+        raise NotImplementedError
 
-    def save(self):
-        return None
+    def save(self, path: str) -> None:
+        self._agent.save(path)
+        torch.save(self.optimiser.state_dict(), os.path.join(path, 'git_agent_optim_state.pt'))
 
     def export(self) -> None:
         return None
