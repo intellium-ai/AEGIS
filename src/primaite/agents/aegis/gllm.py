@@ -126,16 +126,6 @@ class GLLM(torch.nn.Module):
         return loss
 
 
-def get_n_trainable_llm_parameters(model):
-    trainable_model_params = 0
-    all_model_params = 0
-    for _, param in model.named_parameters():
-        all_model_params += param.numel()
-        if param.requires_grad:
-            trainable_model_params += param.numel()
-    return f"Trainable LLM parameters: {trainable_model_params:,}\nAll LLM parameters: {all_model_params:,}\nPercentage of trainable LLM parameters: {trainable_model_params / all_model_params:.2%}%"
-
-
 def train_loop(
     model: GLLM,
     dataloader: DataLoader,
@@ -147,8 +137,8 @@ def train_loop(
 
     model.train(mode=True)
     timestamp = datetime.now().strftime("%H-%M-%d-%m")
-    print(get_n_trainable_llm_parameters(model.llm))
     train_losses = []
+
     for epoch in range(n_epochs):
         gllm_responses = []
 
@@ -190,4 +180,3 @@ def train_loop(
                 os.makedirs(f"./Trainings/{timestamp}")
             plt.savefig(f"./Trainings/{timestamp}/Training_Losses.png")
             torch.save(model.state_dict(), f"./Trainings/{timestamp}/{epoch+1}.pth")
-    return gllm_responses

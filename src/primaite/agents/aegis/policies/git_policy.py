@@ -5,11 +5,21 @@ from typing import Tuple
 import numpy as np
 import logging
 
+from peft.tuners.lora import LoraConfig
+
 from primaite.agents.aegis.modules.llm import LLM
 from primaite.agents.aegis.modules.ge import GraphEmbedding
 
 
 logging.getLogger().setLevel(logging.INFO)
+
+default_peft_config = LoraConfig(
+    task_type="CAUSAL_LM",
+    r=64,
+    lora_dropout=0.1,
+    target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "wte"],
+    lora_alpha=32,
+)
 
 
 class GITPolicy(nn.Module):
@@ -17,14 +27,13 @@ class GITPolicy(nn.Module):
         self,
         state_space: int = None,
         hidden_dim: int = None,
-        ge_learning_rate: float = 0.0001,
-        llm_device: str = "cuda:0",
+        learning_rate: float = 0.005,
         ge_device: str = "cuda:1",
         n_graph_tokens: int = 10,
+        lora_config: LoraConfig = default_peft_config,
     ):
 
         super(GITPolicy, self).__init__()
-        self.llm_device = llm_device
         self.ge_device = ge_device
 
         # space size check
@@ -32,7 +41,7 @@ class GITPolicy(nn.Module):
         if hidden_dim is None:
             hidden_dim = state_space * 2
 
-        self.llm = LLM()
+        self.llm = LLM(peft_config=lora_config)
 
         self.ge = GraphEmbedding(
             in_channels=state_space,
@@ -44,7 +53,7 @@ class GITPolicy(nn.Module):
 
         # For tracking episode rewards and probs
         self.roll_out = []
-        self.optimizer = Adam(self.parameters(), lr=ge_learning_rate)
+        self.optimizer = Adam(self.parameters(), lr=learning_rate)
 
     def put_data(self, data):
         self.roll_out.append(data)
@@ -54,7 +63,6 @@ class GITPolicy(nn.Module):
 
         # 1.0 - Get the graph token(s)
         graph_output = self.ge(graph_batch)
-        print("graph output shape:", graph_output.shape)
         graph_embs = graph_output.to(torch.float16)  # Match graph embs with LLM dimensionality
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
 

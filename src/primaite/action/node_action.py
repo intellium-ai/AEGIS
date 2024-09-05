@@ -15,7 +15,6 @@ def get_node_action_dict(network: Network):
     return create_node_action_dict(len(network.nodes), len(network.service_names))
 
 
-@dataclass
 # TODO - make sure action can actually be applied, given the current network
 class NodeAction(BaseModel):
     network: Network

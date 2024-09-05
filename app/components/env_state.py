@@ -60,7 +60,4 @@ class EnvironmentState:
 
         if self.info is None:
             return ""
-        res = ""
-        for k, v in asdict(self.info):
-            res += f"{k}: {v}\n"
-        return res
+        return self.info.reasoning
