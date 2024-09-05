@@ -154,3 +154,5 @@ benchmark/output
 .vscode
 /aegis
 /notebooks/Trainings
+*/runs
+*/saved_models
