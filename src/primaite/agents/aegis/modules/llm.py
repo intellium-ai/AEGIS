@@ -283,9 +283,30 @@ class LLM(torch.nn.Module):
 
     def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int]) -> Tuple[torch.Tensor, torch.Tensor]:
         """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
-        allowed_indices = []
+        allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
 
-        if prev_token_ids:
+        token_ids = torch.empty(logits.shape[0], dtype=torch.long, device=logits.device)
+        probs = torch.empty(logits.shape[0], dtype=torch.float32, device=logits.device)
+
+        # For each sequence, apply the filtering to the output logits and select the highest logit
+        for i in range(logits.shape[0]):
+            filtered_logits = logits[i, allowed_indices[i]]
+            filtered_probs = torch.nn.functional.softmax(filtered_logits, dim=0)
+
+            if do_sample:
+                sampled_indicies = torch.multinomial(filtered_probs, num_samples=1)
+                token_ids[i] = allowed_indices[i][sampled_indicies]
+                probs[i] = filtered_probs[sampled_indicies]
+            else:
+                max_probs, max_indices = torch.max(filtered_probs, dim=-1)
+                token_ids[i] = allowed_indices[i][max_indices]
+                probs[i] = max_probs
+
+        return token_ids.unsqueeze(1), probs.unsqueeze(1)
+
+    def _generate_allowed_indicies(self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]) -> List[torch.Tensor]:
+        allowed_indices = []
+        if prev_token_ids is not None:
             for prev_token_id in prev_token_ids:
                 # If the previous was not a number - force one next
                 if not prev_token_id in self.numeric_token_ids.values():
@@ -298,7 +319,7 @@ class LLM(torch.nn.Module):
                 # Use torch.long cos we use this as an index later
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long, device=logits.device
                     )
                 )
 
@@ -310,22 +331,12 @@ class LLM(torch.nn.Module):
             for _ in range(logits.shape[0]):
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long, device=logits.device
                     )
                 )
-
-        token_ids = torch.empty(logits.shape[0], dtype=torch.long).to(logits.device)
-        probs = torch.empty(logits.shape[0], dtype=torch.float32).to(logits.device)
-
-        # For each sequence, apply the filtering to the output logits and select the highest logit
-        for i in range(logits.shape[0]):
-            filtered_logits = logits[i, allowed_indices[i]]
-            max_probs, max_indices = torch.max(filtered_logits, dim=-1)
-            token_ids[i] = allowed_indices[i][max_indices]
-            probs[i] = max_probs
-
-        return token_ids.unsqueeze(1), probs.unsqueeze(1)
-
+                
+        return allowed_indices
+    
     def _generate_last_state(
         self, texts: List[str] = None, input_ids: torch.Tensor = None, input_embeddings: torch.Tensor = None
     ) -> torch.Tensor:
