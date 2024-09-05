@@ -4,11 +4,13 @@ from pathlib import Path
 import pandas as pd
 
 import streamlit as st
-from components import Simulation
+from components import Simulation, Agent
 from streamlit import session_state as state
 
 training_config_root = Path("../agents/training_configs/")
 lay_down_config_root = Path("../data/laydown_configs/")
+
+# NOTE: TRAINING BREAKS FOR EVERY AGENT -> SEEMINGLY MANY DIFFERENT REASONS?????
 
 class TrainingStage(Enum):
     NOT_LOADED = 0
@@ -82,9 +84,17 @@ def selection_component():
     train_button_text = "Restart Training" if state.stage == TrainingStage.DONE else "Start Training"
     train_button = st.button(train_button_text, type="primary", disabled=(state.stage != TrainingStage.READY), use_container_width=True)
 
+    agentObj = Agent(
+        agent_class=state.agent['name'],         
+        training_config_path=training_config_path,
+        lay_down_config_path=lay_down_config_path
+    )
+
     # this doesn't work
     if train_button:
         state.stage = TrainingStage.RUNNING
+        agentObj.agent.learn()
+
 
     # for development debugging
     st.sidebar.write(f"Training Config Path: {training_config_path}")

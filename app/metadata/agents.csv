@@ -1,6 +1,6 @@
 id,name,label,is_trainable,description
-1,git_agent,GIT,true,Lorem ya mom
-2,gnn_agent,GNN,true,Errhhhhhhmm
+1,git,GIT,true,Lorem ya mom
+2,gnn,GNN,true,Errhhhhhhmm
 4,hardcoded,Hardcoded,false,The plan is also already in place
 5,rllib,Ray RLlib,true,Reinforce me baby
 6,sb3,Stable Baseline 3,true,
