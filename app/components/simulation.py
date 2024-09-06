@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import pickle
 
 from components.env_state import EnvironmentState
 from primaite.agents import AgentSessionABC
