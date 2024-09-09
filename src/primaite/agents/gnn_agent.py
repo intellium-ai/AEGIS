@@ -38,8 +38,13 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
+        # Effectively the observation space features -1 as we don't include the node id in that.
+        obs_space_dim = self._env.observation_space.shape[1] - 1
+        
+        # Max action integer that can be made.
+        action_space = self._env.action_space.n
         self._agent = GNNPolicy(
-            state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001, device=device
+            state_space=obs_space_dim, action_space=action_space, hidden_dim=128, learning_rate=0.0001, device=device
         ).to(device)
 
         print(self._agent)
