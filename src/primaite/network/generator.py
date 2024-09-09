@@ -82,10 +82,11 @@ class NetworkGenerator:
         self.iers: list[IER] = []
         self.green_pols: list[NodeStateInstructionGreen] = []
         self.red_pols: list[NodeStateInstructionRed] = []
+        self.node_type_counts: dict = {}
 
         self.graph: nx.Graph = self.__generate_graph()
-        self.links_dict: dict[str, Link] = self.__create_link_dict()
         self.nodes_dict: dict[str, NodeUnion] = self.__create_nodes_dict()
+        self.links_dict: dict[str, Link] = self.__create_link_dict()
         self.network: Network = self.__create_network()
         self.network_description: str = network_connectivity_desc(self.network)
         self.laydown_save_path: str | Path | None = None
@@ -142,11 +143,12 @@ class NetworkGenerator:
             # generate a unique ID for each link
             link_id = f"{index}"
             
+
             # get the names and IDs of the source and destination nodes
             src_node_id = str(src_node)
-            src_node_name = f"Node_{src_node_id}"
+            src_node_name = self.nodes_dict[src_node_id].name
             dest_node_id = str(dest_node)
-            dest_node_name = f"Node_{dest_node_id}"
+            dest_node_name = self.nodes_dict[dest_node_id].name
             
             # create the Link object
             link = Link(
@@ -179,7 +181,13 @@ class NetworkGenerator:
             # extract node attributes
             node_type = self.graph.nodes[node_id]['type']
 
-            node_name = f"Node_{node_id}"
+            # format the nodes name
+            if node_type.name not in self.node_type_counts:
+                self.node_type_counts[node_type.name] = 1
+            else:
+                self.node_type_counts[node_type.name] += 1
+
+            node_name = f"{node_type.name}_{self.node_type_counts[node_type.name]}"
             
             # determine priority and hardware state (for demonstration purposes, these are random)
             priority = random.choice(list(Priority))
@@ -232,13 +240,17 @@ class NetworkGenerator:
         return nodes_dict
 
     def __create_network(self) -> Network:
-        return Network(
+
+        network = Network(
             nodes_dict=self.nodes_dict, 
             links_dict=self.links_dict, 
             service_names=self.services, 
             ports_list=self.ports, 
             graph=self.graph
         )
+
+        return network
+        
 
     def show_network(self) -> plt.Figure:
 
@@ -410,6 +422,9 @@ class NetworkGenerator:
     # --------------------- TARGET STUFF
 
     def generate_target_action(self) -> None:
+
+        print(self.links_dict)
+
         reasoning = self.pretrained_llm.generate_prompt_response(
             prompt_template=REASON_ACTION_SPACE_NODE_SELECT_TEMPLATE,
             grammar=AgentReasoningNodeSelection,

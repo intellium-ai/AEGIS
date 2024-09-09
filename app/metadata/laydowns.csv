@@ -4,3 +4,5 @@ id,name,label,description
 3,lay_down_config_3_DOS_very_basic,Very Basic DOS,
 4,lay_down_config_5_data_manipulation,Data Manipulation #1,
 5,lay_down_config_6_data_manipulation,Data Manipulation #2,
+6,With Better Node Names,With Better Node Names,
+7,Better Node Descriptions,Better Node Descriptions,
