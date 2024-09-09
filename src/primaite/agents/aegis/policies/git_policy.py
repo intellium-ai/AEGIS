@@ -27,36 +27,35 @@ class GITPolicy(nn.Module):
         self,
         state_space: int = None,
         hidden_dim: int = None,
-        learning_rate: float = 0.005,
-        ge_device: str = "cuda:1",
+        ge_device: str = "cuda:0",
         n_graph_tokens: int = 10,
         lora_config: LoraConfig = default_peft_config,
+        **kwargs
     ):
-
+        
         super(GITPolicy, self).__init__()
         self.ge_device = ge_device
 
         # space size check
-        assert state_space is not None, "None state_space input: state_space should be assigned."
-        if hidden_dim is None:
+        assert not (state_space is None and 'ge' not in kwargs.keys()), "None state_space input: state_space should be assigned."
+        if hidden_dim is None and 'ge' not in kwargs.keys():
             hidden_dim = state_space * 2
 
-        self.llm = LLM(peft_config=lora_config)
+        if 'llm' in kwargs:
+            self.llm = kwargs['llm']
+        else:
+            self.llm = LLM(peft_config=lora_config)
 
-        self.ge = GraphEmbedding(
-            in_channels=state_space,
-            hidden_dim=hidden_dim,
-            output_dim=self.llm.llm_embedding_size,
-            device=ge_device,
-            n_tokens=n_graph_tokens,
-        ).to(self.ge_device)
-
-        # For tracking episode rewards and probs
-        self.roll_out = []
-        self.optimizer = Adam(self.parameters(), lr=learning_rate)
-
-    def put_data(self, data):
-        self.roll_out.append(data)
+        if 'ge' in kwargs:
+            self.ge = kwargs['ge']
+        else:
+            self.ge = GraphEmbedding(
+                in_channels=state_space,
+                hidden_dim=hidden_dim,
+                output_dim=self.llm.llm_embedding_size,
+                device=ge_device,
+                n_tokens=n_graph_tokens,
+            ).to(self.ge_device)
 
     def forward(self, graph_batch, action_prompt, reasoning_prompt):
         """This should return the action integer"""
@@ -71,11 +70,10 @@ class GITPolicy(nn.Module):
         inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"],
-            attention_mask=inputs["attention_mask"],
+            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'),
+            attention_mask=inputs["attention_mask"].to('cuda:0'),
             grad=False,
             restrict_output=False,
-            max_new_tokens=15,
         )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
@@ -85,51 +83,20 @@ class GITPolicy(nn.Module):
 
         # 4.0 - Generate the next action (5 tokens required per action)
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"], attention_mask=inputs["attention_mask"], max_new_tokens=5
+            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'), attention_mask=inputs["attention_mask"].to('cuda:0'), max_new_tokens=5
         )
         response = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
-        return response, probs.squeeze(), reasoning_statement
+        return (response, probs.squeeze(), reasoning_statement, (inputs["inputs_embeds"].detach(), token_ids.squeeze().detach()))
 
-    def train_net(self, gamma: float = 0.99) -> Tuple[float, float]:
-        R = 0
-        G = []
-        G_t = 0
+    def save(self, path: str) -> None:
+        self.llm.save(path)
+        self.ge.save(path)
 
-        # Whitening baseline
-        for r, prob in self.roll_out[::-1]:
-            G_t = r + gamma * G_t
-            G.append(G_t)
-
-        G = np.array(G)
-        G_mean = G.mean()
-        G_std = G.std() + 1e-8  # add small episilon to avoid div by 0
-
-        # Check that the total reward is not 0
-        if sum(x[0] for x in self.roll_out) == 0:
-            self.roll_out = []  # reset
-            return 0, 0
-
-        # Calculate loss for the episode and do backprop
-        total_loss = 0
-        for r, prob in self.roll_out[::-1]:
-            R = r + gamma * R
-            for p in prob:
-                loss = -p * ((R - G_mean) / G_std)
-                total_loss += loss
-
-        total_loss.backward()
-        self.optimizer.step()
-
-        # Reset gradients
-        self.optimizer.zero_grad()
-
-        # Clear up any gpu memory that may be holding onto tensors unnecessarily
-        torch.cuda.empty_cache()
-
-        # Get average reward and reset rollout
-        mean_reward = np.mean([rew[0] for rew in self.roll_out])
-        self.roll_out = []
-
-        return total_loss.cpu().detach().numpy(), mean_reward
+    @classmethod
+    def load(cls, path: str) -> None:
+        return cls(
+            llm=LLM.load(path), 
+            ge=GraphEmbedding.load(path)
+        )

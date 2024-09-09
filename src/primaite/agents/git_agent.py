@@ -2,12 +2,15 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Tuple
+import time
+import os
 
 import matplotlib.pyplot as plt
 import numpy as np
-from primaite.network import Network
+from tqdm import tqdm
 import torch
 from torch_geometric.data.batch import Batch
+from torch.utils.tensorboard import SummaryWriter
 
 from primaite.agents.aegis.policies.git_policy import GITPolicy
 from primaite.agents.aegis.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
@@ -17,6 +20,7 @@ from primaite.agents.llm.prompting import AgentNodeAction
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite
+from primaite.network import Network
 
 logging.getLogger().setLevel(logging.INFO)
 
@@ -28,18 +32,18 @@ class GITAgent(AgentSessionABC):
     @dataclass
     class ActionInfo(AgentSessionABC.ActionInfo): ...
 
-    def __init__(self, training_config_path, lay_down_config_path):
+    def __init__(self, training_config_path, lay_down_config_path, save_path: str = None):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.GIT
 
-        self._setup()
+        self._setup(save_path=save_path)
 
         # Set the node and service maps for prompt - llm - action conversion
         self.node_mapping = self._env.nodes
         self.service_mapping = {key + 1: value for key, value in enumerate(self._env.services_list)}
 
-    def _setup(self):
+    def _setup(self, save_path: str = None):
         if not isinstance(self.session_path, Path):
             self.session_path = Path(self.session_path)
 
@@ -50,13 +54,15 @@ class GITAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self._agent = GITPolicy(
-            state_space=6,
-            hidden_dim=128,
-            n_graph_tokens=20,
-            learning_rate=0.0001,
-            ge_device="cuda:0",
-        )
+        if save_path is not None:
+            self._agent = GITPolicy.load(save_path)
+        else:
+            self._agent = GITPolicy(
+                state_space=6,
+                hidden_dim=128,
+                n_graph_tokens=20,
+                ge_device="cuda:0",
+            )
 
         logging.info(self._agent)
 
@@ -67,6 +73,11 @@ class GITAgent(AgentSessionABC):
         self._can_learn = True
         self._can_evaluate = True
 
+        self.optimiser = torch.optim.Adam(self._agent.parameters(), maximize=True, lr=0.01)
+        if save_path is not None:
+            self.optimiser.load_state_dict(torch.load(os.path.join(save_path, 'git_agent_optim_state.pt')))
+        self.writer = SummaryWriter(flush_secs=15)
+
     def _save_checkpoint(self) -> None:
         pass
 
@@ -74,7 +85,7 @@ class GITAgent(AgentSessionABC):
         """Construct a graph from the observation space, using only the node features"""
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
-        state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(device)
+        state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32, device=device)
         state = Batch.from_data_list([state])
         return state
 
@@ -82,13 +93,17 @@ class GITAgent(AgentSessionABC):
 
         graph_batch = self.create_graph(obs)
         action_prompt, reasoning_prompt = self._build_prompt()
-        llm_action_text, probs, reasoning_statement = self._agent(graph_batch, action_prompt, reasoning_prompt)
+        llm_action_text, probs, reasoning_statement, pre_action_input = self._agent(graph_batch, action_prompt, reasoning_prompt)
 
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
-        action = self.get_node_action(text_output=llm_action_text)
-        network = Network.from_env(self._env)
-        action = action.to_node_action(network=network).action_id
-        return action, probs
+        try:
+            action = self.get_node_action(text_output=llm_action_text)
+            network = Network.from_env(self._env)
+            action = action.to_node_action(network=network).action_id
+        except:
+            action = 0
+            print('Invalid LLM Action')
+        return action, torch.sum(torch.log(probs)), pre_action_input
 
     def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]: ...
 
@@ -159,11 +174,10 @@ class GITAgent(AgentSessionABC):
 
         splits = text_output.split(".")
 
-        # Check for no action
-        if splits[0] == "0":
+        if splits[0] in self.node_mapping.keys():
+            node = str(self.node_mapping[splits[0]])
+        else:
             return AgentNodeAction(node_name="NONE", node_property="NONE", property_action="NONE", service_name="NONE")
-
-        node = str(self.node_mapping[splits[0]])
 
         match int(splits[1]):
             case 1:
@@ -186,6 +200,12 @@ class GITAgent(AgentSessionABC):
                 property_action = "PATCH"
                 node_property = "SERVICE"
                 service_name = self.service_mapping[int(splits[2])]
+            case _:
+                node = "NONE"
+                property_action = "NONE"
+                node_property = "NONE"
+                service_name = "NONE"
+
 
         return AgentNodeAction(
             node_name=str(node), node_property=node_property, property_action=property_action, service_name=service_name
@@ -206,85 +226,120 @@ class GITAgent(AgentSessionABC):
         self.is_eval = True
 
         for _ in range(episodes):
+            state = self._env.reset()
+            terminated, steps, rew = False, 0, 0
 
-            obs = self._env.reset()
-            done, steps, rew = False, 0, 0
+            episode_rewards = []
 
-            while steps < time_steps and not done:
-
-                action, _ = self._calculate_action(obs)
-                obs, rewards, done, _ = self._env.step(action=action)
+            while steps < time_steps and not terminated:
+                with torch.no_grad():
+                    action, _, _ = self._calculate_action(state)
+                state, reward, terminated, _ = self._env.step(action=action)
                 steps += 1
-                rew += rewards
+                
+                episode_rewards.append(reward)
 
-        self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
 
     def learn(self, **kwargs):
-        time_steps = self._training_config.num_train_steps
-        episodes = self._training_config.num_train_episodes
+        discount_factor = kwargs.pop('discount_factor', 0.9)
+
+        max_steps = 50 #self._training_config.num_train_steps
+        num_episodes = 20 #self._training_config.num_train_episodes
         self.is_eval = False
-        losses = []
-        mean_rewards = []
-        for ep in range(episodes):
-            obs = self._env.reset()
 
-            # TEMP: Jump ahead because reward is 0 at the beginning for a while
-            # for _ in range(20):
-            #     obs, rewards, done, _ = self._env.step(0)
-            done, steps, rew = False, 0, 0
+        global_step = 0
 
-            while steps < time_steps and not done:
+        pbar = tqdm(total=max_steps, unit='step')
+        for episode in range(num_episodes):
+            pbar.reset()
+            pbar.set_description(desc=f'Episode {episode} Running')
 
-                action, probs = self._calculate_action(obs)
+            episode_rewards = []
+            episode_pre_action_inps = []
+            episode_action_tokens = []
+            epsiode_actions = []
+            step_times = []
 
-                obs, rewards, done, _ = self._env.step(action=action)
-                # Clear up any gpu memory that may be holding onto tensors unnecessarily
-                torch.cuda.empty_cache()
-                self._agent.put_data((rewards, probs))
+            state = self._env.reset()
 
-                steps += 1
-                print(f"step {steps}")
-                rew += rewards
-                self._save_checkpoint()
+            terminated, step = False, 0
+            while step  < max_steps and not terminated:
 
-            loss, mean_reward = self._agent.train_net()
-            losses.append(loss)
-            mean_rewards.append(mean_reward)
-            self._save_training_fig(losses=losses, mean_rewards=mean_rewards)
-            logging.info(f"Completed episode: {ep} with loss {loss}")
-            self._env._write_av_reward_per_episode()
-            self.save()
+                with torch.no_grad():
+                    action, _, pre_action_input = self._calculate_action(state)
+                state, reward, terminated, _ = self._env.step(action=action)
 
+                episode_rewards.append(reward)
+                episode_pre_action_inps.append(pre_action_input[0])
+                episode_action_tokens.append(pre_action_input[1])
+                epsiode_actions.append(action)
+
+                #torch.cuda.empty_cache()
+                
+                pbar.update(1)
+                pbar.set_postfix({'Reward': reward})
+                self.writer.add_scalar('step/reward', reward, global_step=global_step+step)
+                step_times.append(time.time())
+
+                step += 1
+
+            pbar.set_description(desc=f'Episode {episode} Done - Reward Sum: {np.sum(episode_rewards)}')
+            self.writer.add_scalar('episode/reward', np.sum(episode_rewards), global_step=episode)
+            self.writer.add_histogram('episode/actions', np.array(epsiode_actions), global_step=episode)
+
+            # End of episode
+            expected_return = 0
+            self.optimiser.zero_grad()
+
+            step_update_values = []
+
+            for t in range(step-1, -1, -1):
+                expected_return += episode_rewards[t]
+
+                step_update_val = 0
+
+                for action_token_prob in self._agent.llm.yield_probs_given_tokens(
+                    inputs_embeds  = episode_pre_action_inps[t].to(torch.device('cuda:0')), 
+                    attention_mask = torch.ones((1, episode_pre_action_inps[t].shape[1]), device='cpu'),
+                    token_ids      = episode_action_tokens[t]
+                ):
+                    update_value = (discount_factor ** t) * expected_return * action_token_prob
+                    update_value.backward()
+
+                    step_update_val += update_value.detach().cpu().item()
+
+                step_update_values.append(step_update_val)
+                expected_return *= discount_factor
+            
+            for i, val in enumerate(step_update_values):
+                self.writer.add_scalar('step/update_val', val, walltime=step_times[t], global_step=global_step+i)
+
+                
+            self.optimiser.step()
+
+            global_step += step
+
+            logging.info(f"Completed episode: {episode}")
+            self.writer.add_scalar('episode/update_val', np.sum(step_update_values), global_step=episode)
+            self.writer.add_scalar('episode/num_steps', step, global_step=episode)
+            self.writer.flush()
+
+        pbar.close()
         self._env.close()
-        super().learn()
-
-        self._plot_av_reward_per_episode(True)
-
-    def _save_training_fig(self, losses, mean_rewards):
-        plt.plot(losses, label="Loss")
-        # plt.plot(mean_reward, label='Avg Reward')
-        plt.xlabel("Episode #")
-        plt.ylabel("Loss")
-        plt.savefig("./loss.png")
-
-        plt.close()
-        plt.plot(mean_rewards, label="Avg Reward")
-        plt.xlabel("Episode #")
-        plt.ylabel("Avg Reward")
-        plt.savefig("./avg_reward.png")
-        plt.close()
+        self.writer.close()
 
     def _get_latest_checkpoint(self):
         pass
 
     @classmethod
     def load(cls, path):
-        pass
+        raise NotImplementedError
 
-    def save(self):
-        return None
+    def save(self, path: str) -> None:
+        self._agent.save(path)
+        torch.save(self.optimiser.state_dict(), os.path.join(path, 'git_agent_optim_state.pt'))
 
     def export(self) -> None:
         return None

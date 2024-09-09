@@ -2,13 +2,13 @@ import torch
 from transformers import BitsAndBytesConfig, AutoTokenizer
 from trl import AutoModelForCausalLMWithValueHead
 from peft.tuners.lora import LoraConfig
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Generator, Optional
 
 
 class LLM(torch.nn.Module):
     def __init__(
         self,
-        model_name="HuggingFaceTB/SmolLM-1.7B-Instruct",
+        model_name_or_path = "HuggingFaceTB/SmolLM-1.7B-Instruct",
         peft_config: LoraConfig = None,
     ):
         super().__init__()
@@ -23,7 +23,7 @@ class LLM(torch.nn.Module):
         self.peft_config = peft_config
         # Use accelerate device mapping to distribute the model across all available cuda devices.
         self.model: AutoModelForCausalLMWithValueHead = AutoModelForCausalLMWithValueHead.from_pretrained(
-            model_name,
+            model_name_or_path,
             torch_dtype=torch.float16,
             device_map="auto",
             quantization_config=self.bnb_config,
@@ -32,7 +32,7 @@ class LLM(torch.nn.Module):
 
         self.model.gradient_checkpointing_enable()
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
+            model_name_or_path, torch_dtype=torch.float16, padding=True, device_map="auto", padding_side="right"
         )
         print(self.get_n_trainable_llm_parameters())
 
@@ -193,16 +193,21 @@ class LLM(torch.nn.Module):
         inputs_embeds: torch.Tensor,
         attention_mask: torch.Tensor,
         grad: bool = True,
-        max_new_tokens: int = 10,
+        max_new_tokens: int = 400,
         restrict_output: bool = True,
-        last_hidden_state=False,
+        last_hidden_state: bool = False,
+        do_sample: bool = True
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        
+        device = inputs_embeds.device
 
-        next_token_ids = torch.empty(0, dtype=torch.int8)
-        next_token_probs = torch.empty(0)
+        next_token_ids = torch.empty(0, dtype=torch.int8, device=device)
+        next_token_probs = torch.empty(0, device=device)
+
         n_tokens = 0
         stop_generating = False
-        per_token_attention = torch.ones((inputs_embeds.shape[0], 1))
+        per_token_attention = torch.ones((inputs_embeds.shape[0], 1), device=device)
+
         # Generate until max_new_tokens reached
         eos_indices = set()
         while not stop_generating:
@@ -217,7 +222,7 @@ class LLM(torch.nn.Module):
             last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
 
             # Get next logits for each input sequence
-            logits = output[1]["logits"][torch.arange(inputs_embeds.size(0)), last_non_pad_indices]
+            logits = output[1]["logits"][torch.arange(inputs_embeds.size(0), device=device), last_non_pad_indices]
 
             # Apply restriction on the output logits (or don't)
             if restrict_output:
@@ -227,29 +232,33 @@ class LLM(torch.nn.Module):
                 else:
                     last_token_ids = None
                 token_ids, probs = self._filter_logits(
-                    logits=logits, prev_token_ids=last_token_ids
+                    logits=logits, prev_token_ids=last_token_ids, do_sample=do_sample
                 )  # WARNING: probs here is ONLY the top logprob
             else:
-                probs = logits.unsqueeze(1)
-                logits = torch.max(logits, dim=-1)
-                token_ids = logits.indices.unsqueeze(1)
+                probs = torch.nn.functional.softmax(logits, dim=1)
+
+                if do_sample:
+                    token_ids = torch.multinomial(probs, num_samples=1)
+                else:
+                    sampled_prob, sampled_indicies = torch.max(probs, dim=-1)
+                    token_ids = sampled_indicies.unsqueeze(1)
 
             # For any sequence that is done already, just set their next token and prob to the last token and prob (the EOS token and prob)
             if len(eos_indices) != 0:
-                eos_mask = torch.zeros(token_ids.size(0), dtype=torch.bool)
+                eos_mask = torch.zeros(token_ids.size(0), dtype=torch.bool, device=device)
 
                 # True for indices in eos_indices
                 for idx in eos_indices:
                     eos_mask[idx] = True
 
                 # For sequences that are done, set their next token and prob to pad token and last token prob
-                pad_token = torch.tensor([self.tokenizer.pad_token_id])
+                pad_token = torch.tensor([self.tokenizer.pad_token_id], device=device)
                 token_ids[eos_mask] = pad_token
                 probs[eos_mask] = next_token_probs[eos_mask, -1, :].unsqueeze(1)
 
             # Add the new tokens to the sequences
-            next_token_ids = torch.cat([next_token_ids, token_ids.to("cpu")], dim=1)
-            next_token_probs = torch.cat([next_token_probs, probs.to("cpu")], dim=1)
+            next_token_ids = torch.cat([next_token_ids, token_ids], dim=1)
+            next_token_probs = torch.cat([next_token_probs, probs], dim=1)
 
             # Check for EOS token IDs so we can exclude that sequence from the next token generation.
             eos_indices.update(
@@ -280,12 +289,68 @@ class LLM(torch.nn.Module):
             return next_token_ids, next_token_probs, last_hidden_state
 
         return next_token_ids, next_token_probs
+    
+    def yield_probs_given_tokens(
+        self,
+        inputs_embeds: torch.Tensor,
+        attention_mask: torch.Tensor,
+        token_ids: torch.Tensor
+    ) -> Generator[torch.Tensor, None, None]:
 
-    def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int]) -> Tuple[torch.Tensor, torch.Tensor]:
+        for i, token_idx in enumerate(token_ids):
+            output = self.model.forward(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
+
+            # Figure out which logits in the sequence to sample from (the right-most significant token determined with the attention mask)
+            last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
+            last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
+
+            # Get next logits for each input sequence
+            logits = output[1]["logits"][torch.arange(inputs_embeds.size(0)), last_non_pad_indices]
+
+            prev_token_ids = None if i == 0 else token_ids[:i]
+            allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
+
+            filtered_logits = logits[:, allowed_indices[0]]
+            filtered_probs = torch.nn.functional.softmax(filtered_logits, dim=1)
+
+            local_idx = torch.where(allowed_indices[0] == token_idx.to(allowed_indices[0].device))[0]
+            probs = filtered_probs.squeeze()[local_idx]
+
+            # Get embeddings of the new tokens
+            new_embeddings = self.get_input_embeddings(token_ids=token_idx.reshape((1,1)), grad=True)["inputs_embeds"]
+
+            # Add the new token to the inputs_embeds and expand the attention mask accordingly
+            inputs_embeds = torch.cat([inputs_embeds, new_embeddings], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.ones((1,1), device=attention_mask.device)], dim=1)
+
+            yield probs
+
+    def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
-        allowed_indices = []
+        allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
 
-        if prev_token_ids:
+        token_ids = torch.empty(logits.shape[0], dtype=torch.long, device=logits.device)
+        probs = torch.empty(logits.shape[0], dtype=torch.float32, device=logits.device)
+
+        # For each sequence, apply the filtering to the output logits and select the highest logit
+        for i in range(logits.shape[0]):
+            filtered_logits = logits[i, allowed_indices[i]]
+            filtered_probs = torch.nn.functional.softmax(filtered_logits, dim=0)
+
+            if do_sample:
+                sampled_indicies = torch.multinomial(filtered_probs, num_samples=1)
+                token_ids[i] = allowed_indices[i][sampled_indicies]
+                probs[i] = filtered_probs[sampled_indicies]
+            else:
+                max_probs, max_indices = torch.max(filtered_probs, dim=-1)
+                token_ids[i] = allowed_indices[i][max_indices]
+                probs[i] = max_probs
+
+        return token_ids.unsqueeze(1), probs.unsqueeze(1)
+
+    def _generate_allowed_indicies(self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]) -> List[torch.Tensor]:
+        allowed_indices = []
+        if prev_token_ids is not None:
             for prev_token_id in prev_token_ids:
                 # If the previous was not a number - force one next
                 if not prev_token_id in self.numeric_token_ids.values():
@@ -298,7 +363,7 @@ class LLM(torch.nn.Module):
                 # Use torch.long cos we use this as an index later
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long, device=logits.device
                     )
                 )
 
@@ -310,22 +375,12 @@ class LLM(torch.nn.Module):
             for _ in range(logits.shape[0]):
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.long, device=logits.device
                     )
                 )
-
-        token_ids = torch.empty(logits.shape[0], dtype=torch.long).to(logits.device)
-        probs = torch.empty(logits.shape[0], dtype=torch.float32).to(logits.device)
-
-        # For each sequence, apply the filtering to the output logits and select the highest logit
-        for i in range(logits.shape[0]):
-            filtered_logits = logits[i, allowed_indices[i]]
-            max_probs, max_indices = torch.max(filtered_logits, dim=-1)
-            token_ids[i] = allowed_indices[i][max_indices]
-            probs[i] = max_probs
-
-        return token_ids.unsqueeze(1), probs.unsqueeze(1)
-
+                
+        return allowed_indices
+    
     def _generate_last_state(
         self, texts: List[str] = None, input_ids: torch.Tensor = None, input_embeddings: torch.Tensor = None
     ) -> torch.Tensor:
@@ -360,3 +415,15 @@ class LLM(torch.nn.Module):
         else:
             with torch.no_grad():
                 return self._generate_last_state(**kwargs)
+
+    def save(self, path: str) -> None:
+        # Save Tokenizer
+        self.tokenizer.init_kwargs.pop('torch_dtype', None)
+        self.tokenizer.save_pretrained(path)
+
+        # Save LLM
+        self.model.save_pretrained(path)
+
+    @classmethod
+    def load(cls, path: str):
+        return cls(path)
