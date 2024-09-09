@@ -1,10 +1,13 @@
 import logging
 from enum import Enum
 from pathlib import Path
+import pickle
+from datetime import datetime
 
+import pandas as pd
 import streamlit as st
-from components import Simulation
 from streamlit import session_state as state
+from primaite.common.simulation import Simulation
 
 
 class EvalStage(Enum):
@@ -13,10 +16,14 @@ class EvalStage(Enum):
     RUNNING = 2
     DONE = 3
 
-
+trained_agents_root = Path("../agents/trained_agents/")
 lay_down_config_root = Path("../data/laydown_configs/")
 training_config_root = Path("../agents/training_configs/")
 session_config_root = Path("../agents/trained_agents/")
+session_obj_save_root = Path("../data/evaluations")
+
+if "use_trained_agent" not in state:
+    state.use_trained_agent = None
 
 if "simulation" not in state:
     state.simulation = None
@@ -24,14 +31,33 @@ if "simulation" not in state:
 if "stage" not in state:
     state.stage = EvalStage.NOT_LOADED
 
+if "agent" not in state:
+    state.agent = None
+
+if "laydown" not in state:
+    state.laydown = None
+
+if "trained_agent_config" not in state:
+    state.trained_agent_config = None
+
+if "save_evaluation" not in state:
+    state.save_evaluation = True
+
+if "evaluation_data" not in state:
+    state.evaluation_data = None
+
 def init_simulation():
-    if state.session_file is not None:
-        session_path = session_config_root / state.session_file
+
+    # using a trained agent
+    if state.trained_agent_config is not None:
+        session_path = trained_agents_root / f"{state.trained_agent_config['name']}"
         state.simulation = Simulation.from_session_file(session_path=session_path)
         state.stage = EvalStage.READY
-    elif state.laydown_file is not None and state.training_file is not None:
-        lay_down_config_path = lay_down_config_root / state.laydown_file
-        training_config_path = training_config_root / state.training_file
+
+    # using an untrained agent
+    elif state.laydown is not None and state.agent is not None:
+        lay_down_config_path = lay_down_config_root / f"{state.laydown['name']}.yaml"
+        training_config_path = training_config_root / f"{state.agent['name']}.yaml"
         state.simulation = Simulation.from_laydown(
             laydown_path=lay_down_config_path, training_path=training_config_path
         )
@@ -62,45 +88,115 @@ def run_simulation():
     state.stage = EvalStage.DONE
 
 def selection_component():
-    st.write("**Choose either:**")
-    st.write("A pre-trained RL agent")
-    session_files = [path.name for path in session_config_root.iterdir()]
-    st.selectbox(
-        "Trained agents",
-        options=session_files,
-        index=None,
-        on_change=init_simulation,
-        key="session_file",
-    )
 
-    st.write("")
-    st.write("Or a new lay-down and training config")
-    laydown_files = [path.name for path in lay_down_config_root.iterdir()]
-    st.selectbox(
-        "Lay down config",
-        options=laydown_files,
-        index=None,
-        on_change=init_simulation,
-        key="laydown_file",
-        disabled=(state.session_file is not None),
-    )
+    init_simulation()
 
-    training_files = [path.name for path in training_config_root.iterdir()]
+    state.use_trained_agent = st.sidebar.toggle(label="Trained Agent", value=state.use_trained_agent)
 
-    st.selectbox(
-        "Training config",
-        options=training_files,
-        index=training_files.index("do_nothing.yaml"),
-        on_change=init_simulation,
-        key="training_file",
-        disabled=(state.session_file is not None),
-    )
+    if state.use_trained_agent:
+        st.write("Select an agent which has already been trained.\nUse the *Training* page to train agents.")
+    else:
+        st.write("Select a non-trainable agent and a laydown to evaluate.")
+
+    trainings_df = pd.read_csv('./metadata/trainings.csv')
+    trained_agents = trainings_df['agent'].unique().tolist() if not trainings_df.empty else []
+    agents_df = pd.read_csv('./metadata/agents.csv')
+    untrainable_agents = agents_df[agents_df['is_trainable'] == False]
+    laydowns_df = pd.read_csv('./metadata/laydowns.csv')
+    trainable_agents = agents_df[
+        (agents_df['is_trainable'] == True) & 
+        (agents_df['name'].isin(trained_agents))
+    ]
+
+    if state.use_trained_agent:
+
+        selected_agent = st.sidebar.selectbox(
+            "Trainable agent:",
+            key="trainable_agents",
+            options=trainable_agents['label'].tolist(),
+            format_func=lambda x: x,
+            on_change=init_simulation,
+        )
+
+        # config for pre-trained agent
+        selected_training = st.sidebar.selectbox(
+            "Training config:",                
+            key="pretrained_laydowns",
+            options=trainings_df['name'].tolist(),
+            format_func=lambda x: x,
+            on_change=init_simulation,
+        )
+
+        if selected_agent:
+            state.agent = trainable_agents[trainable_agents['label'] == selected_agent].iloc[0].to_dict()
+            training_config_path = training_config_root / f"{state.agent['name']}.yaml"
+        else:
+            st.sidebar.write("Please select an agent")
+
+        if selected_training:
+            state.trained_agent_config = trainings_df[trainings_df['name'] == selected_training].iloc[0].to_dict()
+            trained_agent_config_path = trained_agents_root / f"{state.trained_agent_config['name']}.yaml"
+        else:
+            st.sidebar.write("Please select a training config")
+
+        # for debug
+        st.write(f"state.trained_agent_config path: \n{trained_agent_config_path}")
+
+    else:
+        # non-trained agent
+        selected_agent = st.sidebar.selectbox(
+            "Non-trainable agent:",
+            key="untrainable_agents",
+            options=untrainable_agents['label'].tolist(),
+            format_func=lambda x: x,
+            on_change=init_simulation,
+        )
+
+        if selected_agent:
+            state.agent = untrainable_agents[untrainable_agents['label'] == selected_agent].iloc[0].to_dict()
+            training_config_path = training_config_root / f"{state.agent['name']}.yaml"
+        else:
+            st.sidebar.write("Please select an agent")
+
+
+        # laydown for non-trained agent
+        selected_laydown = st.sidebar.selectbox(
+            "Laydown:",                
+            key="all_laydowns",
+            options=laydowns_df['label'].tolist(),
+            format_func=lambda x: x,
+            on_change=init_simulation,
+        )
+
+        if selected_laydown:
+            state.laydown = laydowns_df[laydowns_df['label'] == selected_laydown].iloc[0].to_dict()
+            lay_down_config_path = lay_down_config_root / f"{state.laydown['name']}.yaml"
+        else:
+            st.sidebar.write("Please select a laydown")
+
+        # for debug
+        st.write(f"state.laydown path: \n{lay_down_config_path}")
+
+    if state.use_trained_agent:
+        state.laydown = None
+    else:
+        state.trained_agent_config = None
+
+    # for debug
+    st.write(f"state.agent path: \n{training_config_path}")
+
+    st.markdown('<div class="mt" />', unsafe_allow_html=True)
+
+    state.save_evaluation = st.sidebar.toggle(label="Save Evaluation", value=state.save_evaluation)
 
 
 with st.sidebar:
     selection_component()
 
-header_col_1, _, header_col_2 = st.columns([3, 1, 3], gap="small")
+
+# ----------------------------------- HEADING
+
+header_col_1, _, header_col_2 = st.columns([3, 1, 3], gap="small", vertical_alignment="bottom")
 
 with header_col_1:
     st.title("Evaluate Agent")
@@ -109,22 +205,21 @@ with header_col_1:
     )
 
 with header_col_2:
-    session_files = [path.name for path in session_config_root.iterdir()]
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        st.write("**Agent:**")
-        if state.simulation is not None:
-            agent = state.simulation.agent
-            training_config = agent._training_config
-            agent_name = f"{training_config.agent_framework}: {training_config.agent_identifier}"
-            st.markdown(f"{agent_name}")
-        else:
-            st.write("None selected.")
-        st.write("")
+    _, button_col = st.columns([2, 2])
+    with button_col:
+
+        button_disabled = False
+        if not state.agent:
+            button_disabled = True
+        if not state.trained_agent_config and not state.laydown:
+            button_disabled = True
 
         eval_button_text = "Restart Simulation" if state.stage == EvalStage.DONE else "Start Simulation"
-        evaluate_button = st.button(eval_button_text, type="primary", disabled=(state.simulation is None))
+        evaluate_button = st.button(eval_button_text, type="primary", use_container_width=True, disabled=(button_disabled))
+        
+        # if evaluate_button:
+        #     run_simulation()
 
 
 st.divider()
@@ -180,6 +275,9 @@ st.markdown(
     .value-text {
         font-size: 48px;
         margin-top: 0;
+    }
+    .mt {
+        margin-top: 48px;
     }
     .changes-label {
         font-size: 16px;
@@ -298,4 +396,29 @@ if state.simulation is not None:
         env_view.pyplot(fig)  # initially populate
 
     if state.stage == EvalStage.DONE:
+
+        evaluations_df = pd.read_csv('./metadata/evaluations.csv')
+        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        eval_obj = {
+            'id': len(evaluations_df) + 1,
+            'name': current_datetime,
+            'agent': state.agent["name"],
+            'training_config': state.trained_agent_config['name'] if state.trained_agent_config else None,
+            'laydown': state.laydown["name"] if state.laydown else None,
+            'final_reward_avg': state.simulation.avg_reward
+        }
+
+        # save session obj
+        if state.save_evaluation:
+            save_path = session_obj_save_root / f"{current_datetime}.pkl"
+            new_row = pd.DataFrame([eval_obj])  # Wrap eval_obj in a list
+            evaluations_df = pd.concat([evaluations_df, new_row], ignore_index=True)
+            evaluations_df.to_csv('./metadata/evaluations.csv', index=False)
+        
+            with open(save_path, 'wb') as f:
+                pickle.dump(state.simulation.history, f)
+
+        state.evaluation_data = eval_obj
+            
         view_analysis_dialog()

@@ -1,0 +1,6 @@
+id,name,label,description
+1,lay_down_config_1_DDOS_basic,Basic DDOS #1,
+2,lay_down_config_2_DDOS_basic,Basic DDOS #2,
+3,lay_down_config_3_DOS_very_basic,Very Basic DOS,
+4,lay_down_config_5_data_manipulation,Data Manipulation #1,
+5,lay_down_config_6_data_manipulation,Data Manipulation #2,

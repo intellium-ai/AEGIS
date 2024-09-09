@@ -1,23 +1,18 @@
-import logging
-from enum import Enum
 from pathlib import Path
+import pickle
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
 
-from components import Simulation
 from streamlit import session_state as state
 
 lay_down_config_root = Path("../data/laydown_configs/")
 training_config_root = Path("../agents/training_configs/")
 session_config_root = Path("../agents/trained_agents/")
-
+session_obj_save_root = Path("../data/evaluations")
 
 # ----------------- STATE
-if "simulation" not in state:
-    state.simulation = None
 
 if "slider_idx" not in state:
     state.slider_idx = 0
@@ -27,12 +22,22 @@ if "selected_node_idx" not in state:
 
 if "selected_edge_idx" not in state:
     state.selected_edge_idx = 0
-    
-simulation = state.simulation
 
+if "evaluation_data" not in state:
+    state.evaluation_data = None
+
+
+history = None
+if state.evaluation_data:
+    history_file_path = session_obj_save_root / f"{state.evaluation_data['name']}.pkl"
+
+    with open(history_file_path, 'rb') as f:
+        history = pickle.load(f)
+    
 # ----------------- FUNCTIONS
 def update_slider_idx(new_value):
     state.slider_idx = new_value
+
     
 
 # ----------------- STYLES
@@ -110,6 +115,43 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ----------------- SIDEBAR
+
+def selection_component():
+
+    evaluations_df = pd.read_csv('./metadata/evaluations.csv')
+
+    options = evaluations_df["name"].tolist()
+    default_idx = len(evaluations_df) - 1
+
+    selected_evaluation = st.selectbox(
+        "Select a previous evaluation:",
+        options=options,
+        index=default_idx,
+        format_func=lambda x: x
+    )
+
+    state.evaluation_data =  evaluations_df[evaluations_df['name'] == options[default_idx]]
+
+    if selected_evaluation:
+        selected_row = evaluations_df[evaluations_df['name'] == selected_evaluation]
+        if not selected_row.empty:
+            state.evaluation_data = selected_row.iloc[0].to_dict()
+        else:
+            st.sidebar.write("Selected evaluation not found in the CSV.")
+
+    if state.evaluation_data:
+        show_eval_data = st.sidebar.toggle(label="Show Evaluation Data", value=False)
+        
+        if show_eval_data:
+            st.write(state.evaluation_data)
+
+
+
+with st.sidebar:
+    selection_component()
+
+
 # ----------------- HEADER SECTION
 header_col_1, _, header_col_2 = st.columns([3, 1, 3], gap="small")
 
@@ -125,7 +167,7 @@ with header_col_2:
 st.divider()
 
 # ----------------- YOU SHALL NOT PASS SECTION
-if not simulation:
+if not state.evaluation_data:
 
     st.warning("""
         ### Hey hey hey...
@@ -140,17 +182,21 @@ if not simulation:
     
 
 # easier to define some stuff here
-node_name_list = simulation.history[0].nodes_table['Name'].tolist()
-edge_name_list = simulation.history[0].traffic_table['Name'].tolist()
+if not history:
+    st.stop()
+
+node_name_list = history[0].nodes_table['Name'].tolist()
+edge_name_list = history[0].traffic_table['Name'].tolist()
 
 active_node = node_name_list[state.selected_node_idx]
 active_edge = edge_name_list[state.selected_edge_idx]
 
 # ----------------- OVERVIEW SECTION
 with st.container():
-    agent = state.simulation.agent
-    training_config = agent._training_config
-    agent_name = f"{training_config.agent_framework}: {training_config.agent_identifier}"
+    agent_name = state.evaluation_data["agent"]
+
+    agents_df = pd.read_csv('./metadata/agents.csv')
+    agent_label = agents_df[agents_df['name'] == agent_name].iloc[0]["label"]
 
     st.markdown(
         f"""
@@ -159,15 +205,15 @@ with st.container():
             <div class="value-container justify-between">
                 <div class="value-box pee">
                     <p class="value-label">Agent</p>
-                    <p class="value-text">{agent_name}</p>
+                    <p class="value-text">{agent_label}</p>
                 </div>
                 <div class="value-box step">
                     <p class="value-label">Steps</p>
-                    <p class="value-text">{len(state.simulation.history) - 1}</p>
+                    <p class="value-text">{len(history) - 1}</p>
                 </div>
                 <div class="value-box reward">
                     <p class="value-label">Final Reward (avg)</p>
-                    <p class="value-text">{state.simulation.avg_reward}</p>
+                    <p class="value-text">{state.evaluation_data['final_reward_avg']}</p>
                 </div>
             </div>
         </div>
@@ -190,8 +236,8 @@ with st.container():
     feature_graph_col_1, _, feature_graph_col_2 = st.columns([3, 1, 3], gap="small")
 
     # calculate the cumulative rewards and average rewards at each step
-    rewards = [state.reward if state.reward is not None else 0 for state in simulation.history]
-    steps = np.arange(1, len(simulation.history) + 1)
+    rewards = [state.reward if state.reward is not None else 0 for state in history]
+    steps = np.arange(1, len(history) + 1)
     cumulative_rewards = np.cumsum(rewards)
     average_rewards = cumulative_rewards / steps
 
@@ -213,9 +259,9 @@ with st.container():
     node_data, edge_data = [], []
 
     # collect data for each step from index 0 to 100
-    for step_idx in range(min(101, len(simulation.history))):
-        nodes_table = simulation.history[step_idx].nodes_table
-        edges_table = simulation.history[step_idx].traffic_table
+    for step_idx in range(min(101, len(history))):
+        nodes_table = history[step_idx].nodes_table
+        edges_table = history[step_idx].traffic_table
         nodes_table['Step'] = step_idx 
         edges_table['Step'] = step_idx 
         node_data.append(nodes_table)
