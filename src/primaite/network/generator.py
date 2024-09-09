@@ -174,19 +174,18 @@ class NetworkGenerator:
         # additional default values for IP address, software state, and file system state 
         default_ip_address = "192.168.1.1"
 
-        # TODO: random choice through these enums
-        default_software_state = SoftwareState.GOOD
-        default_file_system_state = FileSystemState.GOOD
-
         # modify the node creation logic to include the required arguments
         for node_id in self.graph.nodes():
             # extract node attributes
             node_type = self.graph.nodes[node_id]['type']
+
             node_name = f"Node_{node_id}"
             
             # determine priority and hardware state (for demonstration purposes, these are random)
             priority = random.choice(list(Priority))
             hardware_state = random.choice(list(HardwareState))
+            file_system_state = random.choice(list(FileSystemState))
+            software_state = random.choice(list(SoftwareState))
             
             # based on the node_type, create an appropriate NodeUnion instance
             if node_type == NodeType.SERVER or node_type == NodeType.COMPUTER:
@@ -197,13 +196,22 @@ class NetworkGenerator:
                     priority=priority,
                     hardware_state=hardware_state,
                     ip_address=default_ip_address,
-                    software_state=default_software_state,
-                    file_system_state=default_file_system_state,
+                    software_state=software_state,
+                    file_system_state=file_system_state,
                     config_values=self.training_config
                 )
 
-                for i, service in enumerate(self.services):
-                    node.add_service(Service(name=service, port=self.ports[i], software_state=default_software_state))
+                # select a random sample of the available services
+                available_services = set(self.services)
+                number_of_services = random.randint(1, len(available_services))
+                chosen_services = random.sample(available_services, number_of_services)
+                
+                for service in chosen_services:
+                    node.add_service(Service(
+                        name=service,
+                        port=SERVICE_TO_PORT_MAP[service],
+                        software_state=random.choice(list(SoftwareState))
+                    ))
 
             else:
                 node = ActiveNode(
@@ -211,10 +219,10 @@ class NetworkGenerator:
                     name=node_name,
                     node_type=node_type,
                     priority=priority,
-                    hardware_state=hardware_state,  # TODO: check this
+                    hardware_state=hardware_state,
                     ip_address=default_ip_address,
-                    software_state=default_software_state,
-                    file_system_state=default_file_system_state,
+                    software_state=software_state,
+                    file_system_state=file_system_state,
                     config_values=self.training_config
                 )
             
@@ -285,6 +293,8 @@ class NetworkGenerator:
             ier_type = random.choice(list(IERType))
             start_step = random.randint(1, 127)
             end_step = random.randint(start_step, 128)
+            service = random.choice(self.services)
+            port = SERVICE_TO_PORT_MAP[service][0]
 
             self.add_ier(
                 _type=ier_type,
@@ -292,8 +302,8 @@ class NetworkGenerator:
                 _start_step=start_step,
                 _end_step=end_step,
                 _load=10000,
-                _protocol="HTTP",
-                _port=["80"],
+                _protocol=service,
+                _port=port,
                 _source_node_id=edge.source_node_id,
                 _dest_node_id=edge.dest_node_id,
                 _mission_criticality=random.randint(0, 5)
@@ -348,7 +358,7 @@ class NetworkGenerator:
                 _end_step=random.randint(start_step, 128),
                 _node_id=node.node_id,
                 _node_pol_type=node_pol_type,
-                _service_name="HTTP",
+                _service_name=random.choice(self.services),
                 _state=state
             )
 
@@ -376,7 +386,7 @@ class NetworkGenerator:
                 case _:
                     pol_state = None
 
-            print("target nide id, ", edge.dest_node_id)
+            service = random.choice(self.services)
 
             self.add_red_pol(
                 _id=str(i),
@@ -385,10 +395,10 @@ class NetworkGenerator:
                 _target_node_id=edge.dest_node_id,
                 _pol_initiator=NodePOLInitiator.IER,
                 _pol_type=pol_type,
-                pol_protocol="HTTP",
+                pol_protocol=service,
                 _pol_state=pol_state,
                 _pol_source_node_id=edge.source_node_id,
-                _pol_source_node_service="HTTP",
+                _pol_source_node_service=service,
                 _pol_source_node_service_state=pol_state
             )
 
@@ -464,6 +474,7 @@ class NetworkGenerator:
         output_graph_data.property_action = self.target_action.property_action
         output_graph_data.service_name = self.target_action.service_name
         output_graph_data.laydown_filename = os.path.basename(laydown_save_path)
+
 
         return output_graph_data
 
