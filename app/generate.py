@@ -35,7 +35,7 @@ if 'generate_dataset_params' not in state:
         'training_config_path': None,
         'seed': None,
         'size': 5,
-        'number_of_nodes': 30,
+        'number_of_nodes': (20, 30),
         'services': ["HTTP", "SSH"],
         'ports': ["80", "22"]
     }
@@ -90,12 +90,16 @@ def generate():
     try:
         state.stage = GenerateStage.RUNNING
 
+        print("state.generate_dataset_params['number_of_nodes']", state.generate_dataset_params["number_of_nodes"][0])
+
         # if generating a dataset
         if state.is_dataset:
             for i in range(state.generate_dataset_params["size"]):
+
+
                 generator = NetworkGenerator(
                     training_config_path=state.generate_dataset_params["training_config_path"],
-                    graph_size=state.generate_dataset_params["number_of_nodes"],
+                    graph_size=state.generate_dataset_params["number_of_nodes"][0],
                     random_seed=state.generate_dataset_params["seed"],
                     services=state.generate_dataset_params["services"],
                     ports=state.generate_dataset_params["ports"],
@@ -125,7 +129,7 @@ def generate():
 
             generator = NetworkGenerator(
                 training_config_path=state.generate_dataset_params["training_config_path"],
-                graph_size=state.generate_dataset_params["number_of_nodes"],
+                graph_size=state.generate_dataset_params["number_of_nodes"][0],
                 random_seed=state.generate_dataset_params["seed"],
                 services=state.generate_dataset_params["services"],
                 ports=state.generate_dataset_params["ports"],
@@ -232,7 +236,25 @@ with config_params_col_1:
         unsafe_allow_html=True
     )  
         
-    state.generate_dataset_params["number_of_nodes"] = st.slider(label="Number of Nodes", min_value=5, max_value=100, value=state.generate_dataset_params["number_of_nodes"])
+    if state.is_dataset:
+        min_nodes, max_nodes = st.slider(
+            label="Number of Nodes (Range)",
+            min_value=5,
+            max_value=100,
+            value=(20, 30), 
+            key="dataset_node_range"
+        )
+        state.generate_dataset_params["number_of_nodes"] = (min_nodes, max_nodes)
+    else:
+        single_slider = st.slider(
+            label="Number of Nodes",
+            min_value=5,
+            max_value=100,
+            value=20,
+            key="single_node_count"
+        )
+
+        state.generate_dataset_params["number_of_nodes"] = (single_slider, single_slider)
     
 
     selected_services = st.multiselect(
@@ -248,13 +270,14 @@ with config_params_col_1:
 
 generator = NetworkGenerator(
     training_config_path=state.generate_dataset_params["training_config_path"], 
-    graph_size=state.generate_dataset_params["number_of_nodes"],
+    graph_size=state.generate_dataset_params["number_of_nodes"][0],
     random_seed=state.generate_dataset_params["seed"],
     services=state.generate_dataset_params["services"],
     ports=state.generate_dataset_params["ports"],
 )
 
 with config_params_col_2:
+    st.write("Example graph in dataset" if state.is_dataset else "Graph")
     fig = generator.show_network()
     st.pyplot(fig)
 

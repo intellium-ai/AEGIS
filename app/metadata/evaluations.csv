@@ -5,3 +5,4 @@ id,name,agent,training_config,laydown,final_reward_avg
 4,20240906_161334,hardcoded,,lay_down_config_1_DDOS_basic,-0.00834
 5,20240906_161431,do_nothing,,lay_down_config_1_DDOS_basic,-0.00653
 6,20240906_161928,random,,from streamlit,-0.01385
+7,20240909_093539,hardcoded,,lay_down_config_1_DDOS_basic,-0.00314

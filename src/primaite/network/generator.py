@@ -173,6 +173,8 @@ class NetworkGenerator:
         # TODO: make variable
         # additional default values for IP address, software state, and file system state 
         default_ip_address = "192.168.1.1"
+
+        # TODO: random choice through these enums
         default_software_state = SoftwareState.GOOD
         default_file_system_state = FileSystemState.GOOD
 
