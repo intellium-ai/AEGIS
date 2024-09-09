@@ -6,3 +6,4 @@ id,name,agent,training_config,laydown,final_reward_avg
 5,20240906_161431,do_nothing,,lay_down_config_1_DDOS_basic,-0.00653
 6,20240906_161928,random,,from streamlit,-0.01385
 7,20240909_093539,hardcoded,,lay_down_config_1_DDOS_basic,-0.00314
+8,20240909_130828,hardcoded,,Random Protocol Test,-0.00211

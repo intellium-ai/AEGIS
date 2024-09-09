@@ -1,5 +1,6 @@
 from enum import Enum
 from pathlib import Path
+import random
 
 import pandas as pd
 import streamlit as st
@@ -90,16 +91,16 @@ def generate():
     try:
         state.stage = GenerateStage.RUNNING
 
-        print("state.generate_dataset_params['number_of_nodes']", state.generate_dataset_params["number_of_nodes"][0])
-
         # if generating a dataset
         if state.is_dataset:
             for i in range(state.generate_dataset_params["size"]):
 
+                node_count = random.randint(state.generate_dataset_params["number_of_nodes"][0], state.generate_dataset_params["number_of_nodes"][1])
+
 
                 generator = NetworkGenerator(
                     training_config_path=state.generate_dataset_params["training_config_path"],
-                    graph_size=state.generate_dataset_params["number_of_nodes"][0],
+                    graph_size=node_count,
                     random_seed=state.generate_dataset_params["seed"],
                     services=state.generate_dataset_params["services"],
                     ports=state.generate_dataset_params["ports"],
@@ -208,7 +209,7 @@ config_params_col_1, _, config_params_col_2 = st.columns([3, 1, 3], gap="small")
 
 with config_params_col_1:
 
-    state.generate_dataset_params["dataset_name"] = st.text_input(label="Dataset Name *", placeholder="Enter dataset name...", value=state.generate_dataset_params["dataset_name"])
+    state.generate_dataset_params["dataset_name"] = st.text_input(label="Dataset name *" if state.is_dataset  else "Laydown name*", placeholder="Enter dataset name...", value=state.generate_dataset_params["dataset_name"])
 
     agents_df = pd.read_csv('./metadata/agents.csv')
 
