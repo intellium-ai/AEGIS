@@ -50,6 +50,7 @@ dependencies = [
     "wandb==0.17.5",
     "bitsandbytes",
     "openai==1.40.8",
+    "python-dotenv==1.0.1",
     "tensorboard==2.12.3
 ]
 

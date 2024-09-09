@@ -63,7 +63,10 @@ class NodeStateInstructionRed(Serializable):
             "state": self.state.name,
             "sourceNodeId": self.source_node_id,
             "sourceNodeService": self.source_node_service,
-            "sourceNodeServiceState": self.get_source_node_service_state,
+            "targetNodeId": self.target_node_id,
+            # need to make this dynamic
+            "sourceNodeServiceState": "CORRUPT",
+            "sourceNodeServiceState": self.get_source_node_service_state()._name_,
         }
         return state_dict
 

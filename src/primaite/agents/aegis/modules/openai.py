@@ -1,23 +1,69 @@
-from openai import OpenAI
-from typing import TypeVar, Type, Any, Dict
-from pydantic import BaseModel
 import json
+from typing import Any, Dict, Literal, Optional, Type, TypeVar
+from openai import OpenAI
+from collections import defaultdict
+from dataclasses import dataclass
 
+from pydantic import BaseModel
+from text_generation.types import Grammar
 T = TypeVar("T", bound=BaseModel)
 
+@dataclass
+class LLMMessage:
+    role: Literal["user", "assistant"]
+    content: str
 
-class OpenAIClient:
-    def __init__(self, openai_api_key: str):
-        self.client = OpenAI(api_key=openai_api_key)
+    def to_dict(self) -> dict[str, str]:
+        return {"role": self.role, "content": self.content}
 
-    def generate(self, prompt: str, max_new_tokens: int = 50) -> str:
-        messages = [{"role": "user", "content": prompt}]
+class OpenAIClient():
 
+    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview"):
+        """Client to use OpenAI models
+
+        Args:
+            api_key (str): The api key to use.
+            model (str): The openai model to use.
+        """
+
+        self.model = model
+        self.client = OpenAI(api_key=api_key)
+
+
+    def generate(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+    ) -> str:
+
+        messages = [LLMMessage("user", prompt)]
+
+        # Convert model to openai friendly format
+        model_schema = self._create_openai_schema(model)
+        function_call = {"name": model.__name__}
+        functions = [model_schema]
+
+
+        # Get response from the api
         response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo", messages=messages, max_tokens=max_new_tokens
+            model=self.model,
+            messages=messages,  # type: ignore
+            functions=functions,
+            function_call=function_call,
+            max_tokens=1024,
+            frequency_penalty=1.0,
+            seed=1,
+            temperature=0.0,
         )
 
-        return response.choices[0].message.content
+        # Process response
+        if model and model_schema:
+            return self._construct_model(model, model_schema, response)
+        else:
+            response_str = str(response.choices[0].message.content)
+            return response_str
+
 
     def generate_model(
         self, prompt: str, grammar: Type[T], max_new_tokens: int = 2048, model: str = "gpt-3.5-turbo"
@@ -111,3 +157,22 @@ class OpenAIClient:
         except json.JSONDecodeError:
             raise Exception("Unable to parse LLM output as the LLM likely generated incomplete JSON")
         return model(**arguments)
+    
+    def generate_prompt_response(
+        self,
+        prompt_template: str,
+        grammar: Type[T],
+        **kwargs
+    ) -> T:
+        """
+        Generate a response based on a given prompt template and grammar.
+
+        :param prompt_template: The template string for the prompt
+        :param grammar: The grammar class to use for parsing the response
+        :param kwargs: Additional keyword arguments to format the prompt template
+        :return: Parsed response according to the specified grammar
+        """
+        prompt = prompt_template.format(**kwargs)
+        return self.generate_model(prompt=prompt, grammar=grammar)
+    
+    
