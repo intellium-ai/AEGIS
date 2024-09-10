@@ -1,13 +1,14 @@
 from logging import Logger
 from pathlib import Path
 from typing import Any
-
+import numpy as np
 import matplotlib.pyplot as plt
 import torch
 from torch.distributions import Categorical
-
+import torch.optim as optim
 from primaite import getLogger
-from primaite.agents.aegis.policies.gnn_policy import GNNPolicy
+from primaite.agents.aegis.modules.ge import GraphEmbedding
+from torch_geometric.data.batch import Batch
 from primaite.agents.agent_abc import AgentSessionABC
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
@@ -16,7 +17,7 @@ from primaite.environment.primaite_env import Primaite
 _LOGGER: Logger = getLogger(__name__)
 
 device = "cuda:0"
-
+learning_rate = 0.005
 
 class GNNAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path):
@@ -24,6 +25,7 @@ class GNNAgent(AgentSessionABC):
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         print(self._training_config.agent_identifier)
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
+        self.roll_out = []
         self._setup()
 
     def _setup(self):
@@ -37,10 +39,10 @@ class GNNAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-
-        self._agent = GNNPolicy(
-            state_space=5, action_space=100, hidden_dim=128, learning_rate=0.0001, device='cpu'
-        ).to('cpu')
+    
+        self._agent = GraphEmbedding(
+            in_channels=5, output_dim=self._env.action_space.n, n_tokens=1, hidden_dim=128, device=device
+        ).to(device)
 
         print(self._agent)
 
@@ -61,7 +63,8 @@ class GNNAgent(AgentSessionABC):
 
     def _calculate_action(self, obs) -> int:
         data = self.create_graph(obs)
-        a_prob = self._agent(data.x, data.edge_index)
+        batch = Batch.from_data_list([data]).to(device)
+        a_prob = self._agent(batch)
         a_distrib = Categorical(torch.exp(a_prob))
         action = a_distrib.sample().item()
         return int(action)
@@ -98,34 +101,38 @@ class GNNAgent(AgentSessionABC):
         self._env.close()
         super().evaluate()
         return avg_ep_rewards
-
+    def put_data(self, data):
+        self.roll_out.append(data)
+        
     def learn(self, **kwargs):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
         losses = []
         mean_rewards = []
-
+        
+        self.optimizer = optim.Adam(self._agent.parameters(), lr=learning_rate)
         for ep in range(episodes):
             obs = self._env.reset()
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
                 data = self.create_graph(obs)
-                a_prob = self._agent(data.x, data.edge_index)
+                batch = Batch.from_data_list([data]).to(device)
+                a_prob = self._agent(batch).squeeze(0)
 
                 a_distrib = Categorical(torch.exp(a_prob))
                 action = a_distrib.sample().item()
 
                 obs, rewards, done, _ = self._env.step(action=int(action))
-
-                self._agent.put_data((rewards, a_prob[0][action]))
+                
+                self.put_data((rewards, a_prob[0][action]))
 
                 steps += 1
                 rew += rewards
                 self._save_checkpoint()
 
-            loss, mean_reward = self._agent.train_net(0.99)
+            loss, mean_reward = self.train_net(0.99)
             losses.append(loss)
             mean_rewards.append(mean_reward)
             self._save_training_fig(losses, mean_rewards)
@@ -136,7 +143,32 @@ class GNNAgent(AgentSessionABC):
         super().learn()
 
         self._plot_av_reward_per_episode(True)
+        
+    def train_net(self, gamma):
+        R = 0
+        G = []
+        G_t = 0
+        # Whitening baseline
+        for r, prob in self.roll_out[::-1]:
+            G_t = r + gamma * G_t
+            G.append(G_t)
 
+        G = np.array(G)
+        G_mean = G.mean()
+        G_std = G.std()
+
+        self.optimizer.zero_grad()
+
+        for r, prob in self.roll_out[::-1]:
+            R = r + gamma * R
+            loss = -prob * ((R - G_mean) / G_std)
+            loss.backward()
+        self.optimizer.step()
+        mean_reward = np.mean([rew[0] for rew in self.roll_out])
+        self.roll_out = []
+
+        return loss.cpu().detach().numpy(), mean_reward
+    
     def _save_training_fig(self, losses, mean_rewards):
         plt.plot(losses, label="Loss")
         # plt.plot(mean_reward, label='Avg Reward')
