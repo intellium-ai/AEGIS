@@ -18,11 +18,11 @@
   node_type: SERVER
   priority: P5
   services:
-  - name: FTP
-    port: '21'
-    state: OVERWHELMED
   - name: HTTP
     port: '80'
+    state: OVERWHELMED
+  - name: FTP
+    port: '21'
     state: PATCHING
   software_state: COMPROMISED
 - file_system_state: NONE
@@ -35,11 +35,11 @@
   node_type: SERVER
   priority: P4
   services:
-  - name: HTTP
-    port: '80'
-    state: NONE
   - name: FTP
     port: '21'
+    state: NONE
+  - name: HTTP
+    port: '80'
     state: COMPROMISED
   - name: SSH
     port: '22'
@@ -55,8 +55,8 @@
   node_type: SERVER
   priority: P4
   services:
-  - name: HTTP
-    port: '80'
+  - name: FTP
+    port: '21'
     state: PATCHING
   software_state: COMPROMISED
 - file_system_state: CORRUPT
@@ -69,8 +69,8 @@
   node_type: COMPUTER
   priority: P1
   services:
-  - name: HTTP
-    port: '80'
+  - name: FTP
+    port: '21'
     state: GOOD
   software_state: PATCHING
 - file_system_state: RESTORING
@@ -97,11 +97,11 @@
   node_type: SERVER
   priority: P1
   services:
-  - name: FTP
-    port: '21'
-    state: PATCHING
   - name: HTTP
     port: '80'
+    state: PATCHING
+  - name: FTP
+    port: '21'
     state: GOOD
   software_state: PATCHING
 - file_system_state: CORRUPT
@@ -127,8 +127,8 @@
   - name: SSH
     port: '22'
     state: PATCHING
-  - name: FTP
-    port: '21'
+  - name: HTTP
+    port: '80'
     state: OVERWHELMED
   software_state: GOOD
 - file_system_state: GOOD
@@ -151,8 +151,8 @@
   node_type: COMPUTER
   priority: P3
   services:
-  - name: FTP
-    port: '21'
+  - name: HTTP
+    port: '80'
     state: COMPROMISED
   software_state: OVERWHELMED
 - file_system_state: RESTORING
@@ -218,8 +218,8 @@
   - name: SSH
     port: '22'
     state: PATCHING
-  - name: HTTP
-    port: '80'
+  - name: FTP
+    port: '21'
     state: PATCHING
   software_state: NONE
 - file_system_state: DESTROYED
@@ -312,11 +312,11 @@
   node_type: COMPUTER
   priority: P4
   services:
-  - name: FTP
-    port: '21'
-    state: COMPROMISED
   - name: HTTP
     port: '80'
+    state: COMPROMISED
+  - name: FTP
+    port: '21'
     state: OVERWHELMED
   software_state: OVERWHELMED
 - file_system_state: NONE
@@ -372,11 +372,11 @@
   - name: SSH
     port: '22'
     state: OVERWHELMED
-  - name: HTTP
-    port: '80'
-    state: COMPROMISED
   - name: FTP
     port: '21'
+    state: COMPROMISED
+  - name: HTTP
+    port: '80'
     state: PATCHING
   software_state: NONE
 - bandwidth: 277
