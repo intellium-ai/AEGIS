@@ -65,6 +65,7 @@ class GNNAgent(AgentSessionABC):
         data = self.create_graph(obs)
         batch = Batch.from_data_list([data]).to(device)
         a_prob = self._agent(batch)
+        
         a_distrib = Categorical(torch.exp(a_prob))
         action = a_distrib.sample().item()
         return int(action)

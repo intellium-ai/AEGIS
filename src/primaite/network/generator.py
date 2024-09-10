@@ -122,15 +122,13 @@ class NetworkGenerator:
 
         # find the highest degree node
         highest_degree_node = max(G.nodes(), key=lambda n: G.degree[n])
-
         # assigning node types
         for node in G.nodes():
-
             # ensure at least one node is a server
-            if node is highest_degree_node:
+            if node == highest_degree_node:
                 G.nodes[node]['type'] = NodeType.SERVER
 
-            if G.degree[node] > 5:
+            elif G.degree[node] > 5:
                 G.nodes[node]['type'] = NodeType.SERVER
                 
             else:
@@ -139,7 +137,6 @@ class NetworkGenerator:
                     G.nodes[node]['type'] = NodeType.COMPUTER
                 else:
                     G.nodes[node]['type'] = random.choice([
-                        NodeType.PRINTER,
                         NodeType.SWITCH,
                         NodeType.COMPUTER,
                     ])

@@ -125,19 +125,14 @@ def generate():
                 state.progress = int(progress_percentage)
                 state.progress_bar.progress(state.progress, text=f"Generating: {state.progress}%")
 
-
-                print("progress_percentage:::", state.progress)
-
-
-
             try:
                 # save to folder
                 dataset_save_path = dataset_save_root / state.generate_dataset_params['dataset_name'] / "dataset.pt"
                 batch = Batch.from_data_list(state.generation_output)
                 torch.save(batch, dataset_save_path) 
 
-            except:
-                st.error("Oopsies... I couldn't save your dataset.")
+            except Exception as e:
+                st.error(f"Oopsies... I couldn't save your dataset.\n{e}")
                 return
         # if just generating a laydown
         else:
