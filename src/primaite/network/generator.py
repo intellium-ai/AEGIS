@@ -130,8 +130,12 @@ class NetworkGenerator:
                     NodeType.COMPUTER,
                     NodeType.LINK
                 ])
-
-        return G
+        
+        # # Check if there are no COMPUTER nodes, if so, make one a computer (avoids primaite bug).
+        # if not any(node['type'] == NodeType.COMPUTER for node in G.nodes(data=True)):
+        #     # Make the next
+            
+        # return G
     
     def __create_link_dict(self) -> dict[str, Link]:
         # init empty link dict
