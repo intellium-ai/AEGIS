@@ -170,6 +170,7 @@ class NetworkGenerator:
 
         # init empty nodes dict
         nodes_dict: Dict[str, NodeUnion] = {}
+        services_used = {service: 0 for service in self.services}
 
         # TODO: make variable
         # additional default values for IP address, software state, and file system state 
@@ -211,11 +212,19 @@ class NetworkGenerator:
                     file_system_state=file_system_state,
                     config_values=self.training_config
                 )
-
-                # select a random sample of the available services
-                available_services = set(self.services)
-                number_of_services = random.randint(1, len(available_services))
-                chosen_services = random.sample(available_services, number_of_services)
+                
+                # ensure each service is used at least once
+                unused_services = [s for s, count in services_used.items() if count == 0]
+                if unused_services:
+                    chosen_services = [random.choice(unused_services)]
+                    available_services = set(self.services) - set(chosen_services)
+                else:
+                    chosen_services = []
+                    available_services = set(self.services)
+                
+                # add more services randomly
+                number_of_additional_services = random.randint(0, len(available_services))
+                chosen_services.extend(random.sample(available_services, number_of_additional_services))
                 
                 for service in chosen_services:
                     node.add_service(Service(
