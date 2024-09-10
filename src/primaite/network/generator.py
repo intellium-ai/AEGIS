@@ -129,7 +129,6 @@ class NetworkGenerator:
                     NodeType.CCTV,
                     NodeType.SWITCH,
                     NodeType.COMPUTER,
-                    NodeType.LINK
                 ])
 
         return G
@@ -191,9 +190,13 @@ class NetworkGenerator:
             
             # determine priority and hardware state (for demonstration purposes, these are random)
             priority = random.choice(list(Priority))
-            hardware_state = random.choice(list(HardwareState))
             file_system_state = random.choice(list(FileSystemState))
             software_state = random.choice(list(SoftwareState))
+
+            # heavily prioritize ON state
+            hardware_states = list(HardwareState)
+            weights = [0.9 if state == HardwareState.ON else 0.02 for state in hardware_states]
+            hardware_state = random.choices(hardware_states, weights=weights)[0]
             
             # based on the node_type, create an appropriate NodeUnion instance
             if node_type == NodeType.SERVER or node_type == NodeType.COMPUTER:
@@ -422,9 +425,6 @@ class NetworkGenerator:
     # --------------------- TARGET STUFF
 
     def generate_target_action(self) -> None:
-
-        print(self.links_dict)
-
         reasoning = self.pretrained_llm.generate_prompt_response(
             prompt_template=REASON_ACTION_SPACE_NODE_SELECT_TEMPLATE,
             grammar=AgentReasoningNodeSelection,
