@@ -39,8 +39,8 @@ class GNNAgent(AgentSessionABC):
         )
 
         self._agent = GNNPolicy(
-            state_space=6, action_space=100, hidden_dim=128, learning_rate=0.0001, device=device
-        ).to(device)
+            state_space=5, action_space=100, hidden_dim=128, learning_rate=0.0001, device='cpu'
+        ).to('cpu')
 
         print(self._agent)
 
@@ -56,7 +56,7 @@ class GNNAgent(AgentSessionABC):
     def create_graph(self, obs):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
-        state.x = torch.tensor(obs[:9, 1:], dtype=torch.float32).to(device)
+        state.x = torch.tensor(obs[:self._env.num_nodes, 1:], dtype=torch.float32).to(device)
         return state
 
     def _calculate_action(self, obs) -> int:

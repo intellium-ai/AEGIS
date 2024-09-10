@@ -47,7 +47,7 @@ class GNNPolicy(nn.Module):
         x = x.to(self.device)
         edge_index = edge_index.to(self.device)
         x = F.relu(self.conv1(x, edge_index))
-        x = global_add_pool(self.layer_norm(x), torch.LongTensor([0 for _ in range(9)]).to(self.device))
+        x = global_add_pool(self.layer_norm(x), torch.LongTensor([0 for _ in range(x.shape[0])]).to(self.device))
         x = F.relu(self.linear(x))
         x = self.linear2(x)
         out = F.log_softmax(x, dim=1)

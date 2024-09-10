@@ -125,12 +125,17 @@ class NetworkGenerator:
             if G.degree[node] > 5:
                 G.nodes[node]['type'] = NodeType.SERVER
             else:
-                G.nodes[node]['type'] = random.choice([
-                    NodeType.PRINTER,
-                    NodeType.SWITCH,
-                    NodeType.COMPUTER,
-                ])
-
+                # If there are not yet any computer nodes, make this node a computer
+                if len([n for n in G.nodes() if G.nodes[n]['type'] == NodeType.COMPUTER]) == 0:
+                    G.nodes[node]['type'] = NodeType.COMPUTER
+                else:
+                    G.nodes[node]['type'] = random.choice([
+                        NodeType.PRINTER,
+                        NodeType.SWITCH,
+                        NodeType.COMPUTER,
+                    ])
+                
+                    
         return G
     
     def __create_link_dict(self) -> dict[str, Link]:
