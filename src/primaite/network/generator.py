@@ -120,13 +120,22 @@ class NetworkGenerator:
         # generate graph from networkx
         G = nx.random_internet_as_graph(n=self.graph_size, seed=self.random_seed)
 
+        # find the highest degree node
+        highest_degree_node = max(G.nodes(), key=lambda n: G.degree[n])
+
         # assigning node types
         for node in G.nodes():
+
+            # ensure at least one node is a server
+            if node is highest_degree_node:
+                G.nodes[node]['type'] = NodeType.SERVER
+
             if G.degree[node] > 5:
                 G.nodes[node]['type'] = NodeType.SERVER
+                
             else:
                 # If there are not yet any computer nodes, make this node a computer
-                if len([n for n in G.nodes() if G.nodes[n]['type'] == NodeType.COMPUTER]) == 0:
+                if len([n for n in G.nodes() if G.nodes[n].get('type') == NodeType.COMPUTER]) == 0:
                     G.nodes[node]['type'] = NodeType.COMPUTER
                 else:
                     G.nodes[node]['type'] = random.choice([
