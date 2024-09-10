@@ -126,7 +126,7 @@ class NetworkGenerator:
                 G.nodes[node]['type'] = NodeType.SERVER
             else:
                 G.nodes[node]['type'] = random.choice([
-                    NodeType.CCTV,
+                    NodeType.PRINTER,
                     NodeType.SWITCH,
                     NodeType.COMPUTER,
                 ])
