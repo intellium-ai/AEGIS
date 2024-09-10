@@ -82,10 +82,11 @@ class NetworkGenerator:
         self.iers: list[IER] = []
         self.green_pols: list[NodeStateInstructionGreen] = []
         self.red_pols: list[NodeStateInstructionRed] = []
+        self.node_type_counts: dict = {}
 
         self.graph: nx.Graph = self.__generate_graph()
-        self.links_dict: dict[str, Link] = self.__create_link_dict()
         self.nodes_dict: dict[str, NodeUnion] = self.__create_nodes_dict()
+        self.links_dict: dict[str, Link] = self.__create_link_dict()
         self.network: Network = self.__create_network()
         self.network_description: str = network_connectivity_desc(self.network)
         self.laydown_save_path: str | Path | None = None
@@ -119,18 +120,28 @@ class NetworkGenerator:
         # generate graph from networkx
         G = nx.random_internet_as_graph(n=self.graph_size, seed=self.random_seed)
 
+        # find the highest degree node
+        highest_degree_node = max(G.nodes(), key=lambda n: G.degree[n])
         # assigning node types
         for node in G.nodes():
-            if G.degree[node] > 5:
+            # ensure at least one node is a server
+            if node == highest_degree_node:
                 G.nodes[node]['type'] = NodeType.SERVER
-            else:
-                G.nodes[node]['type'] = random.choice([
-                    NodeType.CCTV,
-                    NodeType.SWITCH,
-                    NodeType.COMPUTER,
-                    NodeType.LINK
-                ])
 
+            elif G.degree[node] > 5:
+                G.nodes[node]['type'] = NodeType.SERVER
+                
+            else:
+                # If there are not yet any computer nodes, make this node a computer
+                if len([n for n in G.nodes() if G.nodes[n].get('type') == NodeType.COMPUTER]) == 0:
+                    G.nodes[node]['type'] = NodeType.COMPUTER
+                else:
+                    G.nodes[node]['type'] = random.choice([
+                        NodeType.SWITCH,
+                        NodeType.COMPUTER,
+                    ])
+                
+                    
         return G
     
     def __create_link_dict(self) -> dict[str, Link]:
@@ -142,11 +153,12 @@ class NetworkGenerator:
             # generate a unique ID for each link
             link_id = f"{index}"
             
+
             # get the names and IDs of the source and destination nodes
             src_node_id = str(src_node)
-            src_node_name = f"Node_{src_node_id}"
+            src_node_name = self.nodes_dict[src_node_id].name
             dest_node_id = str(dest_node)
-            dest_node_name = f"Node_{dest_node_id}"
+            dest_node_name = self.nodes_dict[dest_node_id].name
             
             # create the Link object
             link = Link(
@@ -169,6 +181,7 @@ class NetworkGenerator:
 
         # init empty nodes dict
         nodes_dict: Dict[str, NodeUnion] = {}
+        services_used = {service: 0 for service in self.services}
 
         # TODO: make variable
         # additional default values for IP address, software state, and file system state 
@@ -179,13 +192,23 @@ class NetworkGenerator:
             # extract node attributes
             node_type = self.graph.nodes[node_id]['type']
 
-            node_name = f"Node_{node_id}"
+            # format the nodes name
+            if node_type.name not in self.node_type_counts:
+                self.node_type_counts[node_type.name] = 1
+            else:
+                self.node_type_counts[node_type.name] += 1
+
+            node_name = f"{node_type.name}_{self.node_type_counts[node_type.name]}"
             
             # determine priority and hardware state (for demonstration purposes, these are random)
             priority = random.choice(list(Priority))
-            hardware_state = random.choice(list(HardwareState))
             file_system_state = random.choice(list(FileSystemState))
             software_state = random.choice(list(SoftwareState))
+
+            # heavily prioritize ON state
+            hardware_states = list(HardwareState)
+            weights = [0.9 if state == HardwareState.ON else 0.02 for state in hardware_states]
+            hardware_state = random.choices(hardware_states, weights=weights)[0]
             
             # based on the node_type, create an appropriate NodeUnion instance
             if node_type == NodeType.SERVER or node_type == NodeType.COMPUTER:
@@ -200,11 +223,19 @@ class NetworkGenerator:
                     file_system_state=file_system_state,
                     config_values=self.training_config
                 )
-
-                # select a random sample of the available services
-                available_services = set(self.services)
-                number_of_services = random.randint(1, len(available_services))
-                chosen_services = random.sample(available_services, number_of_services)
+                
+                # ensure each service is used at least once
+                unused_services = [s for s, count in services_used.items() if count == 0]
+                if unused_services:
+                    chosen_services = [random.choice(unused_services)]
+                    available_services = set(self.services) - set(chosen_services)
+                else:
+                    chosen_services = []
+                    available_services = set(self.services)
+                
+                # add more services randomly
+                number_of_additional_services = random.randint(0, len(available_services))
+                chosen_services.extend(random.sample(available_services, number_of_additional_services))
                 
                 for service in chosen_services:
                     node.add_service(Service(
@@ -232,13 +263,17 @@ class NetworkGenerator:
         return nodes_dict
 
     def __create_network(self) -> Network:
-        return Network(
+
+        network = Network(
             nodes_dict=self.nodes_dict, 
             links_dict=self.links_dict, 
             service_names=self.services, 
             ports_list=self.ports, 
             graph=self.graph
         )
+
+        return network
+        
 
     def show_network(self) -> plt.Figure:
 

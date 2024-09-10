@@ -44,6 +44,12 @@ if 'generate_dataset_params' not in state:
 if 'stage' not in state:
     state.stage = GenerateStage.READY
 
+if 'progress' not in state:
+    state.progress = 0
+
+if 'progress_bar' not in state:
+    state.progress_bar = st.sidebar.empty()
+
 st.markdown(
     """
     <style>
@@ -93,7 +99,8 @@ def generate():
 
         # if generating a dataset
         if state.is_dataset:
-            for i in range(state.generate_dataset_params["size"]):
+            total_items = state.generate_dataset_params["size"]
+            for i in range(total_items):
 
                 node_count = random.randint(state.generate_dataset_params["number_of_nodes"][0], state.generate_dataset_params["number_of_nodes"][1])
 
@@ -114,16 +121,19 @@ def generate():
                 output = generator.run_end_to_end(laydown_save_path=laydown_save_path)
                 state.generation_output.append(output)
 
+                progress_percentage = (i + 1) / total_items * 100
+                state.progress = int(progress_percentage)
+                state.progress_bar.progress(state.progress, text=f"Generating: {state.progress}%")
+
             try:
                 # save to folder
                 dataset_save_path = dataset_save_root / state.generate_dataset_params['dataset_name'] / "dataset.pt"
                 batch = Batch.from_data_list(state.generation_output)
                 torch.save(batch, dataset_save_path) 
 
-            except:
-                st.error("Oopsies... I couldn't save your dataset.")
+            except Exception as e:
+                st.error(f"Oopsies... I couldn't save your dataset.\n{e}")
                 return
-
         # if just generating a laydown
         else:
             laydown_save_path = Path("../data") / "laydown_configs" / f"{state.generate_dataset_params['dataset_name']}.yaml"
@@ -158,6 +168,9 @@ def generate():
             except:
                 st.error("Oopsies... I couldn't save your laydown.")
                 return
+            
+        state.progress = 0
+        state.progress_bar.empty() 
 
         st.balloons()    
         

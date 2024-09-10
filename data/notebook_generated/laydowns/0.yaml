@@ -8,666 +8,352 @@
   - name: HTTP
   - name: SSH
   - name: FTP
-- file_system_state: NONE
-  hardware_state: RESETTING
+- file_system_state: REPAIRING
+  hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_0
+  name: SERVER_1
   node_class: SERVICE
   node_id: '0'
   node_type: SERVER
-  priority: P5
+  priority: P4
   services:
   - name: FTP
     port: '21'
-    state: OVERWHELMED
+    state: COMPROMISED
   - name: HTTP
     port: '80'
-    state: PATCHING
-  software_state: COMPROMISED
-- file_system_state: NONE
-  hardware_state: RESETTING
+    state: OVERWHELMED
+  software_state: OVERWHELMED
+- file_system_state: GOOD
+  hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_1
+  name: SERVER_2
   node_class: SERVICE
   node_id: '1'
   node_type: SERVER
-  priority: P4
+  priority: P3
   services:
+  - name: HTTP
+    port: '80'
+    state: OVERWHELMED
+  software_state: OVERWHELMED
+- file_system_state: REPAIRING
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: COMPUTER_1
+  node_class: SERVICE
+  node_id: '2'
+  node_type: COMPUTER
+  priority: P1
+  services:
+  - name: SSH
+    port: '22'
+    state: PATCHING
   - name: HTTP
     port: '80'
     state: NONE
-  - name: FTP
-    port: '21'
-    state: COMPROMISED
-  - name: SSH
-    port: '22'
-    state: OVERWHELMED
-  software_state: NONE
-- file_system_state: RESTORING
-  hardware_state: RESETTING
+  software_state: GOOD
+- file_system_state: REPAIRING
+  hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_2
-  node_class: SERVICE
-  node_id: '2'
-  node_type: SERVER
-  priority: P4
-  services:
-  - name: HTTP
-    port: '80'
-    state: PATCHING
-  software_state: COMPROMISED
-- file_system_state: CORRUPT
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_3
-  node_class: SERVICE
+  name: PRINTER_1
+  node_class: ACTIVE
   node_id: '3'
-  node_type: COMPUTER
+  node_type: PRINTER
   priority: P1
-  services:
-  - name: HTTP
-    port: '80'
-    state: GOOD
-  software_state: PATCHING
+  software_state: NONE
+- file_system_state: GOOD
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: SWITCH_1
+  node_class: ACTIVE
+  node_id: '4'
+  node_type: SWITCH
+  priority: P4
+  software_state: NONE
 - file_system_state: RESTORING
   hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_4
-  node_class: SERVICE
-  node_id: '4'
-  node_type: SERVER
-  priority: P5
-  services:
-  - name: SSH
-    port: '22'
-    state: GOOD
-  software_state: OVERWHELMED
-- file_system_state: RESTORING
-  hardware_state: RESETTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_5
+  name: SERVER_3
   node_class: SERVICE
   node_id: '5'
   node_type: SERVER
-  priority: P1
-  services:
-  - name: FTP
-    port: '21'
-    state: PATCHING
-  - name: HTTP
-    port: '80'
-    state: GOOD
-  software_state: PATCHING
-- file_system_state: CORRUPT
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_6
-  node_class: ACTIVE
-  node_id: '6'
-  node_type: LINK
   priority: P5
-  software_state: GOOD
-- file_system_state: REPAIRING
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_7
-  node_class: SERVICE
-  node_id: '7'
-  node_type: SERVER
-  priority: P3
   services:
   - name: SSH
     port: '22'
-    state: PATCHING
+    state: COMPROMISED
   - name: FTP
     port: '21'
-    state: OVERWHELMED
+    state: NONE
   software_state: GOOD
+- file_system_state: REPAIRING
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: PRINTER_2
+  node_class: ACTIVE
+  node_id: '6'
+  node_type: PRINTER
+  priority: P2
+  software_state: OVERWHELMED
+- file_system_state: RESTORING
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: SWITCH_2
+  node_class: ACTIVE
+  node_id: '7'
+  node_type: SWITCH
+  priority: P1
+  software_state: COMPROMISED
+- file_system_state: REPAIRING
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: COMPUTER_2
+  node_class: SERVICE
+  node_id: '8'
+  node_type: COMPUTER
+  priority: P2
+  services:
+  - name: SSH
+    port: '22'
+    state: NONE
+  software_state: COMPROMISED
 - file_system_state: GOOD
   hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_8
+  name: PRINTER_3
   node_class: ACTIVE
-  node_id: '8'
-  node_type: CCTV
-  priority: P4
-  software_state: GOOD
-- file_system_state: NONE
+  node_id: '9'
+  node_type: PRINTER
+  priority: P3
+  software_state: NONE
+- file_system_state: REPAIRING
   hardware_state: RESETTING
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_9
-  node_class: SERVICE
-  node_id: '9'
-  node_type: COMPUTER
-  priority: P3
-  services:
-  - name: FTP
-    port: '21'
-    state: COMPROMISED
-  software_state: OVERWHELMED
-- file_system_state: RESTORING
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_10
+  name: SWITCH_3
   node_class: ACTIVE
   node_id: '10'
   node_type: SWITCH
-  priority: P5
-  software_state: COMPROMISED
-- file_system_state: REPAIRING
-  hardware_state: NONE
+  priority: P2
+  software_state: GOOD
+- file_system_state: NONE
+  hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_11
+  name: PRINTER_4
   node_class: ACTIVE
   node_id: '11'
-  node_type: LINK
+  node_type: PRINTER
   priority: P5
-  software_state: COMPROMISED
-- file_system_state: NONE
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_12
-  node_class: ACTIVE
-  node_id: '12'
-  node_type: CCTV
-  priority: P4
-  software_state: COMPROMISED
+  software_state: GOOD
 - file_system_state: GOOD
   hardware_state: BOOTING
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_13
+  name: PRINTER_5
+  node_class: ACTIVE
+  node_id: '12'
+  node_type: PRINTER
+  priority: P2
+  software_state: PATCHING
+- file_system_state: NONE
+  hardware_state: 'ON'
+  ip_address: 192.168.1.1
+  item_type: NODE
+  name: PRINTER_6
   node_class: ACTIVE
   node_id: '13'
-  node_type: CCTV
-  priority: P1
-  software_state: OVERWHELMED
-- file_system_state: DESTROYED
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_14
-  node_class: ACTIVE
-  node_id: '14'
-  node_type: CCTV
-  priority: P5
-  software_state: COMPROMISED
-- file_system_state: CORRUPT
-  hardware_state: SHUTTING_DOWN
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_15
-  node_class: SERVICE
-  node_id: '15'
-  node_type: COMPUTER
+  node_type: PRINTER
   priority: P2
-  services:
-  - name: SSH
-    port: '22'
-    state: PATCHING
-  - name: HTTP
-    port: '80'
-    state: PATCHING
-  software_state: NONE
-- file_system_state: DESTROYED
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_16
-  node_class: ACTIVE
-  node_id: '16'
-  node_type: SWITCH
-  priority: P2
-  software_state: GOOD
-- file_system_state: REPAIRING
-  hardware_state: SHUTTING_DOWN
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_17
-  node_class: ACTIVE
-  node_id: '17'
-  node_type: SWITCH
-  priority: P2
-  software_state: COMPROMISED
+  software_state: PATCHING
 - file_system_state: RESTORING
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_18
-  node_class: ACTIVE
-  node_id: '18'
-  node_type: SWITCH
-  priority: P4
-  software_state: GOOD
-- file_system_state: REPAIRING
-  hardware_state: RESETTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_19
-  node_class: ACTIVE
-  node_id: '19'
-  node_type: CCTV
-  priority: P4
-  software_state: PATCHING
-- file_system_state: DESTROYED
-  hardware_state: NONE
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_20
-  node_class: ACTIVE
-  node_id: '20'
-  node_type: LINK
-  priority: P3
-  software_state: PATCHING
-- file_system_state: DESTROYED
   hardware_state: 'ON'
   ip_address: 192.168.1.1
   item_type: NODE
-  name: Node_21
-  node_class: ACTIVE
-  node_id: '21'
-  node_type: CCTV
-  priority: P2
-  software_state: GOOD
-- file_system_state: CORRUPT
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_22
-  node_class: ACTIVE
-  node_id: '22'
-  node_type: CCTV
-  priority: P4
-  software_state: COMPROMISED
-- file_system_state: DESTROYED
-  hardware_state: BOOTING
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_23
-  node_class: ACTIVE
-  node_id: '23'
-  node_type: LINK
-  priority: P2
-  software_state: OVERWHELMED
-- file_system_state: REPAIRING
-  hardware_state: 'OFF'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_24
+  name: COMPUTER_3
   node_class: SERVICE
-  node_id: '24'
+  node_id: '14'
   node_type: COMPUTER
-  priority: P4
+  priority: P1
   services:
-  - name: FTP
-    port: '21'
-    state: COMPROMISED
   - name: HTTP
     port: '80'
-    state: OVERWHELMED
-  software_state: OVERWHELMED
-- file_system_state: NONE
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_25
-  node_class: ACTIVE
-  node_id: '25'
-  node_type: LINK
-  priority: P1
-  software_state: NONE
-- file_system_state: CORRUPT
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_26
-  node_class: ACTIVE
-  node_id: '26'
-  node_type: CCTV
-  priority: P2
-  software_state: GOOD
-- file_system_state: NONE
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_27
-  node_class: ACTIVE
-  node_id: '27'
-  node_type: CCTV
-  priority: P2
-  software_state: NONE
-- file_system_state: REPAIRING
-  hardware_state: NONE
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_28
-  node_class: ACTIVE
-  node_id: '28'
-  node_type: SWITCH
-  priority: P3
-  software_state: COMPROMISED
-- file_system_state: DESTROYED
-  hardware_state: 'ON'
-  ip_address: 192.168.1.1
-  item_type: NODE
-  name: Node_29
-  node_class: SERVICE
-  node_id: '29'
-  node_type: COMPUTER
-  priority: P3
-  services:
+    state: PATCHING
   - name: SSH
     port: '22'
-    state: OVERWHELMED
-  - name: HTTP
-    port: '80'
-    state: COMPROMISED
+    state: GOOD
   - name: FTP
     port: '21'
     state: PATCHING
   software_state: NONE
-- bandwidth: 277
+- bandwidth: 270
   destination: '1'
   id: '0'
   item_type: LINK
   name: '0'
   source: '0'
-- bandwidth: 622
+- bandwidth: 273
   destination: '2'
   id: '1'
   item_type: LINK
   name: '1'
   source: '0'
-- bandwidth: 876
+- bandwidth: 370
   destination: '3'
   id: '2'
   item_type: LINK
   name: '2'
   source: '0'
-- bandwidth: 190
+- bandwidth: 879
   destination: '4'
   id: '3'
   item_type: LINK
   name: '3'
   source: '0'
-- bandwidth: 489
+- bandwidth: 670
   destination: '5'
   id: '4'
   item_type: LINK
   name: '4'
   source: '0'
-- bandwidth: 670
+- bandwidth: 720
   destination: '6'
   id: '5'
   item_type: LINK
   name: '5'
   source: '0'
-- bandwidth: 244
+- bandwidth: 714
   destination: '7'
   id: '6'
   item_type: LINK
   name: '6'
   source: '0'
-- bandwidth: 664
-  destination: '18'
+- bandwidth: 389
+  destination: '2'
   id: '7'
   item_type: LINK
   name: '7'
-  source: '0'
-- bandwidth: 177
-  destination: '23'
+  source: '1'
+- bandwidth: 501
+  destination: '3'
   id: '8'
   item_type: LINK
   name: '8'
-  source: '0'
-- bandwidth: 457
-  destination: '26'
+  source: '1'
+- bandwidth: 864
+  destination: '4'
   id: '9'
   item_type: LINK
   name: '9'
-  source: '0'
-- bandwidth: 363
-  destination: '2'
+  source: '1'
+- bandwidth: 810
+  destination: '5'
   id: '10'
   item_type: LINK
   name: '10'
   source: '1'
-- bandwidth: 511
-  destination: '3'
+- bandwidth: 207
+  destination: '11'
   id: '11'
   item_type: LINK
   name: '11'
   source: '1'
-- bandwidth: 529
-  destination: '4'
+- bandwidth: 631
+  destination: '13'
   id: '12'
   item_type: LINK
   name: '12'
   source: '1'
-- bandwidth: 746
-  destination: '5'
+- bandwidth: 123
+  destination: '14'
   id: '13'
   item_type: LINK
   name: '13'
   source: '1'
-- bandwidth: 438
-  destination: '12'
+- bandwidth: 381
+  destination: '3'
   id: '14'
   item_type: LINK
   name: '14'
-  source: '1'
-- bandwidth: 571
-  destination: '15'
+  source: '2'
+- bandwidth: 905
+  destination: '4'
   id: '15'
   item_type: LINK
   name: '15'
-  source: '1'
-- bandwidth: 941
-  destination: '22'
+  source: '2'
+- bandwidth: 182
+  destination: '5'
   id: '16'
   item_type: LINK
   name: '16'
-  source: '1'
-- bandwidth: 740
-  destination: '3'
+  source: '2'
+- bandwidth: 460
+  destination: '4'
   id: '17'
   item_type: LINK
   name: '17'
-  source: '2'
-- bandwidth: 628
-  destination: '4'
+  source: '3'
+- bandwidth: 169
+  destination: '5'
   id: '18'
   item_type: LINK
   name: '18'
-  source: '2'
-- bandwidth: 642
+  source: '3'
+- bandwidth: 747
   destination: '5'
   id: '19'
   item_type: LINK
   name: '19'
-  source: '2'
-- bandwidth: 348
-  destination: '10'
+  source: '4'
+- bandwidth: 423
+  destination: '6'
   id: '20'
   item_type: LINK
   name: '20'
-  source: '2'
-- bandwidth: 968
-  destination: '11'
+  source: '5'
+- bandwidth: 278
+  destination: '10'
   id: '21'
   item_type: LINK
   name: '21'
-  source: '2'
-- bandwidth: 618
-  destination: '16'
+  source: '5'
+- bandwidth: 523
+  destination: '12'
   id: '22'
   item_type: LINK
   name: '22'
-  source: '2'
-- bandwidth: 994
-  destination: '20'
+  source: '5'
+- bandwidth: 242
+  destination: '8'
   id: '23'
   item_type: LINK
   name: '23'
-  source: '2'
-- bandwidth: 714
-  destination: '28'
+  source: '6'
+- bandwidth: 846
+  destination: '9'
   id: '24'
   item_type: LINK
   name: '24'
-  source: '2'
-- bandwidth: 835
-  destination: '4'
+  source: '6'
+- bandwidth: 517
+  destination: '7'
   id: '25'
   item_type: LINK
   name: '25'
-  source: '3'
-- bandwidth: 613
-  destination: '5'
-  id: '26'
-  item_type: LINK
-  name: '26'
-  source: '3'
-- bandwidth: 996
-  destination: '5'
-  id: '27'
-  item_type: LINK
-  name: '27'
-  source: '4'
-- bandwidth: 527
-  destination: '10'
-  id: '28'
-  item_type: LINK
-  name: '28'
-  source: '4'
-- bandwidth: 675
-  destination: '25'
-  id: '29'
-  item_type: LINK
-  name: '29'
-  source: '4'
-- bandwidth: 471
-  destination: '6'
-  id: '30'
-  item_type: LINK
-  name: '30'
-  source: '5'
-- bandwidth: 709
-  destination: '9'
-  id: '31'
-  item_type: LINK
-  name: '31'
-  source: '5'
-- bandwidth: 659
-  destination: '10'
-  id: '32'
-  item_type: LINK
-  name: '32'
-  source: '5'
-- bandwidth: 568
-  destination: '11'
-  id: '33'
-  item_type: LINK
-  name: '33'
-  source: '5'
-- bandwidth: 944
-  destination: '13'
-  id: '34'
-  item_type: LINK
-  name: '34'
-  source: '5'
-- bandwidth: 838
-  destination: '29'
-  id: '35'
-  item_type: LINK
-  name: '35'
-  source: '5'
-- bandwidth: 997
-  destination: '8'
-  id: '36'
-  item_type: LINK
-  name: '36'
   source: '6'
-- bandwidth: 898
-  destination: '24'
-  id: '37'
-  item_type: LINK
-  name: '37'
-  source: '6'
-- bandwidth: 818
-  destination: '7'
-  id: '38'
-  item_type: LINK
-  name: '38'
-  source: '6'
-- bandwidth: 888
-  destination: '11'
-  id: '39'
-  item_type: LINK
-  name: '39'
-  source: '7'
-- bandwidth: 451
-  destination: '14'
-  id: '40'
-  item_type: LINK
-  name: '40'
-  source: '7'
-- bandwidth: 683
-  destination: '19'
-  id: '41'
-  item_type: LINK
-  name: '41'
-  source: '7'
-- bandwidth: 502
-  destination: '21'
-  id: '42'
-  item_type: LINK
-  name: '42'
-  source: '7'
-- bandwidth: 132
-  destination: '27'
-  id: '43'
-  item_type: LINK
-  name: '43'
-  source: '7'
-- bandwidth: 293
-  destination: '9'
-  id: '44'
-  item_type: LINK
-  name: '44'
-  source: '7'
-- bandwidth: 106
-  destination: '8'
-  id: '45'
-  item_type: LINK
-  name: '45'
-  source: '7'
-- bandwidth: 370
-  destination: '9'
-  id: '46'
-  item_type: LINK
-  name: '46'
-  source: '8'
-- bandwidth: 341
-  destination: '17'
-  id: '47'
-  item_type: LINK
-  name: '47'
-  source: '9'
-- destination: '19'
+- destination: '6'
   end_step: 117
   id: '0'
   item_type: RED_IER
@@ -675,9 +361,9 @@
   mission_criticality: 1
   port: '2'
   protocol: SSH
-  source: '7'
+  source: '5'
   start_step: 53
-- destination: '21'
+- destination: '10'
   end_step: 61
   id: '1'
   item_type: RED_IER
@@ -685,7 +371,7 @@
   mission_criticality: 2
   port: '2'
   protocol: FTP
-  source: '7'
+  source: '5'
   start_step: 24
 - destination: '4'
   end_step: 122
@@ -695,9 +381,9 @@
   mission_criticality: 4
   port: '2'
   protocol: FTP
-  source: '2'
+  source: '1'
   start_step: 120
-- destination: '9'
+- destination: '4'
   end_step: 108
   id: '3'
   item_type: RED_IER
@@ -705,9 +391,9 @@
   mission_criticality: 3
   port: '2'
   protocol: SSH
-  source: '5'
+  source: '2'
   start_step: 79
-- destination: '16'
+- destination: '11'
   end_step: 102
   id: '4'
   item_type: GREEN_IER
@@ -715,77 +401,77 @@
   mission_criticality: 1
   port: '2'
   protocol: FTP
-  source: '2'
+  source: '1'
   start_step: 80
 - end_step: 121
   id: '0'
   initiator: IER
   item_type: RED_POL
-  nodeId: '18'
+  nodeId: '4'
   protocol: SSH
   sourceNodeId: '0'
   sourceNodeService: SSH
   sourceNodeServiceState: 'ON'
   start_step: 117
   state: 'ON'
-  targetNodeId: '18'
+  targetNodeId: '4'
   type: OPERATING
 - end_step: 78
   id: '1'
   initiator: IER
   item_type: RED_POL
-  nodeId: '29'
+  nodeId: '4'
   protocol: SSH
-  sourceNodeId: '5'
+  sourceNodeId: '3'
   sourceNodeService: SSH
   sourceNodeServiceState: BOOTING
   start_step: 60
   state: BOOTING
-  targetNodeId: '29'
+  targetNodeId: '4'
   type: OPERATING
 - end_step: 105
   id: '2'
   initiator: IER
   item_type: RED_POL
-  nodeId: '19'
+  nodeId: '6'
   protocol: SSH
-  sourceNodeId: '7'
+  sourceNodeId: '5'
   sourceNodeService: SSH
   sourceNodeServiceState: OVERWHELMED
   start_step: 48
   state: OVERWHELMED
-  targetNodeId: '19'
+  targetNodeId: '6'
   type: OS
 - end_step: 108
   id: '3'
   initiator: IER
   item_type: RED_POL
-  nodeId: '5'
+  nodeId: '7'
   protocol: FTP
-  sourceNodeId: '1'
+  sourceNodeId: '0'
   sourceNodeService: FTP
   sourceNodeServiceState: NONE
   start_step: 42
   state: NONE
-  targetNodeId: '5'
+  targetNodeId: '7'
   type: OPERATING
 - end_step: 125
   id: '4'
   initiator: IER
   item_type: RED_POL
-  nodeId: '14'
+  nodeId: '6'
   protocol: SSH
-  sourceNodeId: '7'
+  sourceNodeId: '5'
   sourceNodeService: SSH
   sourceNodeServiceState: NONE
   start_step: 120
   state: NONE
-  targetNodeId: '14'
+  targetNodeId: '6'
   type: OS
 - end_step: 106
   id: '0'
   item_type: GREEN_POL
-  nodeId: '12'
+  nodeId: '6'
   protocol: FTP
   start_step: 105
   state: SHUTTING_DOWN
@@ -793,7 +479,7 @@
 - end_step: 90
   id: '1'
   item_type: GREEN_POL
-  nodeId: '19'
+  nodeId: '9'
   protocol: FTP
   start_step: 13
   state: RESTORING
@@ -801,7 +487,7 @@
 - end_step: 124
   id: '2'
   item_type: GREEN_POL
-  nodeId: '25'
+  nodeId: '12'
   protocol: FTP
   start_step: 124
   state: PATCHING
@@ -809,7 +495,7 @@
 - end_step: 104
   id: '3'
   item_type: GREEN_POL
-  nodeId: '9'
+  nodeId: '4'
   protocol: SSH
   start_step: 74
   state: REPAIRING
@@ -817,7 +503,7 @@
 - end_step: 91
   id: '4'
   item_type: GREEN_POL
-  nodeId: '14'
+  nodeId: '7'
   protocol: SSH
   start_step: 56
   state: NONE
