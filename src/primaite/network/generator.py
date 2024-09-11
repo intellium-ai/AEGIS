@@ -509,6 +509,7 @@ class NetworkGenerator:
         output_graph_data.property_action = self.target_action.property_action
         output_graph_data.service_name = self.target_action.service_name
         output_graph_data.laydown_filename = os.path.basename(laydown_save_path)
+        
 
 
         return output_graph_data

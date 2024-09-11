@@ -8,10 +8,10 @@ import pandas as pd
 
 # SETUP
 evaluation_agent = 'gnn' # GNN, LLM, SB3, GLLM
-lay_down_folder_pth = os.listdir("../data/datasets/GLLM_Graph_Dataset/")
+lay_down_folder_pth = os.listdir("../data/datasets/notebook_generated_dataset/")
 pt_dataset_name = 'dataset.pt'
 results_df_save_pth = f'./{evaluation_agent}_results.csv'
-fireworks_api_key = 'GET YER OWN'
+fireworks_api_key = ''
 
 match evaluation_agent:
     case 'gnn':
