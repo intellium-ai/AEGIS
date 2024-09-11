@@ -15,8 +15,8 @@ from torch.utils.tensorboard import SummaryWriter
 from primaite.agents.aegis.policies.git_policy import GITPolicy
 from primaite.agents.aegis.prompts import LLM_PROMPT, LLM_REASONING_PROMPT
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.llm.observation import get_obs_act_history_str, ObservedState
-from primaite.agents.llm.prompting import AgentNodeAction
+from primaite.agents.vanilla_llm.observation import get_obs_act_history_str, ObservedState
+from primaite.agents.vanilla_llm.prompting import AgentNodeAction
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite

@@ -12,8 +12,8 @@ from primaite.agents.git_agent import GITAgent
 from primaite.agents.gnn_agent import GNNAgent
 from primaite.agents.hardcoded_acl import HardCodedACLAgent
 from primaite.agents.hardcoded_node import HardCodedNodeAgent
-from primaite.agents.llm import LLMAgent
-from primaite.agents.llm.trainable_agent import TrainableLLMAgent
+from primaite.agents.vanilla_llm import LLMAgent
+from primaite.agents.vanilla_llm.trainable_agent import TrainableLLMAgent
 from primaite.agents.rllib import RLlibAgent
 from primaite.agents.sb3 import SB3Agent
 from primaite.agents.simple import DoNothingACLAgent, DoNothingNodeAgent, DummyAgent, PickACardAnyCardAgent, RandomAgent

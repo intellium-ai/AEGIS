@@ -190,6 +190,7 @@ class SB3Agent(AgentSessionABC):
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
         self.is_eval = True
+        ep_rewards = []
         if self._training_config.deterministic:
             deterministic_str = "deterministic"
         else:
@@ -203,10 +204,13 @@ class SB3Agent(AgentSessionABC):
             for step in range(time_steps):
                 action = self._calculate_action(obs)
                 obs, rewards, done, info = self._env.step(action)
+            ep_rewards.append(self._env.average_reward)
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
-
+        return np.mean(ep_rewards)
+    
+    
     def save(self) -> None:
         """Save the agent."""
         self._agent.save(self._saved_agent_path)

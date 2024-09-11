@@ -18,7 +18,7 @@ from primaite.common.enums import HardwareState, NodeType, Priority, SoftwareSta
 from primaite.network.prompting import AgentNodeAction, AgentReasoningNodeSelection, REASON_ACTION_SPACE_NODE_SELECT_TEMPLATE, ACTION_SELECTION_TEMPLATE, ACTION_INFO
 from primaite.common.service import Service
 from primaite.nodes import NodeUnion, NodeStateInstructionGreen, NodeStateInstructionRed, ActiveNode, ServiceNode
-from primaite.agents.llm.observation import network_connectivity_desc
+from primaite.agents.vanilla_llm.observation import network_connectivity_desc
 from primaite.network.network import Network
 from primaite.links import Link
 from primaite.config.training_config import TrainingConfig, load

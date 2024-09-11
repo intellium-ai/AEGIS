@@ -7,7 +7,7 @@ import torch
 from torch.distributions import Categorical
 
 from primaite import getLogger
-from primaite.agents.aegis.policies.gnn_policy import GNNPolicy
+from primaite.agents.aegis.modules.ge import GraphEmbedding
 from primaite.agents.agent_abc import AgentSessionABC
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
@@ -37,17 +37,11 @@ class GNNAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-
-        # Effectively the observation space features -1 as we don't include the node id in that.
-        obs_space_dim = self._env.observation_space.shape[1] - 1
-        
-        # Max action integer that can be made.
-        action_space = self._env.action_space.n
-        self._agent = GNNPolicy(
-            state_space=obs_space_dim, action_space=action_space, hidden_dim=128, learning_rate=0.0001, device=device
+    
+        self._agent = GraphEmbedding(
+            in_channels=6, output_dim=self._env.action_space.n, n_tokens=1, hidden_dim=128, device=device
         ).to(device)
 
-        print(self._agent)
 
         # Keep track of env history
         super()._setup()
@@ -80,7 +74,8 @@ class GNNAgent(AgentSessionABC):
 
         :param kwargs: Any agent-specific key-word args to be passed.
         """
-        avg_ep_rewards = []
+        ep_rewards = []
+        
         time_steps = self._training_config.num_eval_steps
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
@@ -98,12 +93,14 @@ class GNNAgent(AgentSessionABC):
                 steps += 1
                 rew += rewards
 
-        # self._env._write_av_reward_per_episode()  # noqa
-        avg_ep_rewards.append(self._env.average_reward)
+            ep_rewards.append(self._env.average_reward)
         self._env.close()
         super().evaluate()
-        return avg_ep_rewards
-
+        return np.mean(ep_rewards)
+    
+    def put_data(self, data):
+        self.roll_out.append(data)
+        
     def learn(self, **kwargs):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes

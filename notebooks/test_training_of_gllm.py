@@ -2,7 +2,7 @@ from primaite.agents.aegis.gllm import GLLM
 from primaite.agents.aegis.modules.openai import OpenAIClient
 from primaite.agents.git_agent import GITAgent
 from torch.utils.data import DataLoader
-from primaite.agents.llm.utils import network_connectivity_desc
+from primaite.agents.vanilla_llm.utils import network_connectivity_desc
 import logging
 
 logging.disable(logging.CRITICAL)

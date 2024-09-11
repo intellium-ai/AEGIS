@@ -17,8 +17,8 @@ from primaite import getLogger
 from primaite.action import NodeAction
 from fireworks.client import Fireworks
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
-from primaite.agents.llm.prompting import (
+from primaite.agents.vanilla_llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
+from primaite.agents.vanilla_llm.prompting import (
     ACTION_INFO,
     AgentNodeAction,
     AgentReasoningNodeSelection,
@@ -79,7 +79,10 @@ class FireworksLLM:
             response_format={"type": "json_object", "schema": model_schema},
             repetition_penalty=repetition_penalty,
         )
-        response = json.loads(response.choices[0].message.content)
+        try:
+            response = json.loads(response.choices[0].message.content)
+        except:
+            response = {}
         return grammar(**response)
 
     def _build_reasoning_prompt(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
@@ -147,8 +150,17 @@ class FireworksLLM:
             new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
             repetition_penalty=1.1,
         )
-        reasoning = agent_reason_select.reasoning
-        node_selection = agent_reason_select.node_name
+        
+        # Handle grammar errors
+        if not agent_reason_select.reasoning:
+            reasoning = 'NONE'
+        else:
+            reasoning = agent_reason_select.reasoning
+            
+        if not agent_reason_select.node_name:
+            node_selection = 'NONE'
+        else:
+            node_selection = agent_reason_select.node_name
 
         # LLM chose to take an action on a node
         if node_selection != "NONE":
@@ -166,15 +178,16 @@ class FireworksLLM:
             )
             try:
                 action = agent_action.to_node_action(network=network)
+                action_id = action.action_id
             except BaseException:
                 _LOGGER.info(f"Invalid LLM action: {agent_action}")
                 action = NodeAction(network=network)
+                action_id = 0
 
         # When the LLM chose to take no action
         else:
             action = NodeAction(network=network)
-
-        action_id = action.action_id
+            action_id = 0
         return action_id, prompt, reasoning
 
 
@@ -185,13 +198,13 @@ class LLMAgent(AgentSessionABC):
         prompt: str
         reasoning: str
 
-    def __init__(self, training_config_path, lay_down_config_path):
+    def __init__(self, training_config_path, lay_down_config_path, fireworks_api_key: str):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.LLM
-        self._setup()
+        self._setup(fireworks_api_key)
 
-    def _setup(self):
+    def _setup(self, fireworks_api_key: str):
         super()._setup()
 
         if not isinstance(self.session_path, Path):
@@ -203,7 +216,7 @@ class LLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = FireworksLLM(api_key="get your own")
+        self._agent = FireworksLLM(api_key=fireworks_api_key)
 
         # Keep track of env history
         self.obs_history = [ObservedState.from_env(self._env)]
@@ -244,7 +257,7 @@ class LLMAgent(AgentSessionABC):
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
         self.is_eval = True
-
+        ep_rewards = []
         _LOGGER.info(f"Num services: {self._env.num_services}")
 
         for _ in range(episodes):
@@ -257,11 +270,11 @@ class LLMAgent(AgentSessionABC):
                 obs, rewards, done, info = self._env.step(action=action)
                 steps += 1
                 # rew += rewards
-
+            ep_rewards.append(self._env.average_reward)
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
-
+        return np.mean(ep_rewards)
     def _get_latest_checkpoint(self):
         pass
 

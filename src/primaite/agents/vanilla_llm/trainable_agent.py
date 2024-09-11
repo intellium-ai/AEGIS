@@ -18,8 +18,8 @@ from trl import AutoModelForCausalLMWithValueHead, PPOConfig, PPOTrainer
 from primaite import getLogger
 from primaite.action import NodeAction
 from primaite.agents.agent_abc import AgentSessionABC
-from primaite.agents.llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
-from primaite.agents.llm.prompting import ACTION_INFO, ACTION_SELECTION, REASON_ACTION_SPACE_NODE_SELECT, SYSTEM_MSG
+from primaite.agents.vanilla_llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
+from primaite.agents.vanilla_llm.prompting import ACTION_INFO, ACTION_SELECTION, REASON_ACTION_SPACE_NODE_SELECT, SYSTEM_MSG
 from primaite.common.enums import AgentFramework, AgentIdentifier
 from primaite.environment.primaite_env import Primaite
 
