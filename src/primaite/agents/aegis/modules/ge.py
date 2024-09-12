@@ -41,7 +41,7 @@ class GraphEmbedding(nn.Module):
         else:
             x = x
 
-        x = global_add_pool(x=x, batch=graph_batch.batch)
+        x = global_add_pool(x=x, batch=graph_batch.batch.to(self.device))
         x = F.relu(x)
         x = self.linear(x)
         x = x.view(graph_batch.batch_size, self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
