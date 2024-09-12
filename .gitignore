@@ -163,3 +163,4 @@ data/datasets
 /notebooks/Trainings
 */runs
 */saved_models
+.profile
