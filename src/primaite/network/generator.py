@@ -470,7 +470,6 @@ class NetworkGenerator:
             raise Exception("Need a laydown. Please use the `generate_laydown` first")
 
         self.simulation = Simulation.from_laydown(laydown_path=self.laydown_save_path, training_path=self.training_config_path)
-
         self.graph_as_red_and_blue = self.simulation.latest_state.network_figure
 
     def create_output_graph_data(self) -> Data:
@@ -481,7 +480,30 @@ class NetworkGenerator:
         state = from_networkx(graph)
         state.x = torch.tensor(obs[:_network.number_of_nodes(), 1:], dtype=torch.float32).to('cpu')
         return state
-    
+    def get_prompt_data(self):
+        node_mapping = self.simulation.env.nodes
+        service_mapping = {key + 1: value for key, value in enumerate(self.simulation.env.services_list)}
+        
+        node_services = {}
+        for node in self.simulation.env.nodes.values():
+            node_services[node.name] = []
+            for service in self.simulation.env.services_list:
+                # Apparently only these NodeUnion types can have services?
+                if node.node_type == NodeType.SERVER or node.node_type == NodeType.COMPUTER:
+                    if node.has_service(service):
+                        node_services[node.name].append([k for k, v in service_mapping.items() if v == service][0])
+        
+        
+        # Get stringified node map, service map, node services
+        node_str = "\n".join(f"{key}: {value}" for key, value in node_mapping.items())  # ID: NODE_NAME
+        services_str = "\n".join(f"{i+ 1}: {service_mapping[i+1]}" for i, _ in enumerate(service_mapping))
+        node_services_str = "\n".join(
+            f"{key}: {', '.join(str(val) for val in value) if value else 'NONE'}"
+            for key, value in node_services.items()
+        )
+        
+        return node_str, services_str, node_services_str
+        
     def run_end_to_end(self, laydown_save_path: str | Path | None) -> Data:
         # add iers
         self.generate_iers()
@@ -500,8 +522,10 @@ class NetworkGenerator:
 
         # simulation
         self.create_simulation()
-        output_graph_data = self.create_output_graph_data()
 
+        # Create prompt data for GLLM
+        node_str, services_str, node_services_str = self.get_prompt_data()
+        output_graph_data = self.create_output_graph_data()
         # add all the useful stuff to the graph output 🤢
         output_graph_data.reasoning = self.target_reasoning.reasoning
         output_graph_data.chosen_node = self.target_action.node_name
@@ -509,7 +533,9 @@ class NetworkGenerator:
         output_graph_data.property_action = self.target_action.property_action
         output_graph_data.service_name = self.target_action.service_name
         output_graph_data.laydown_filename = os.path.basename(laydown_save_path)
-
+        output_graph_data.node_ids = node_str
+        output_graph_data.services = services_str
+        output_graph_data.node_services = node_services_str
 
         return output_graph_data
 

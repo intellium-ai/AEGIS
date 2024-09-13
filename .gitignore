@@ -154,12 +154,13 @@ benchmark/output
 # training + eval files
 data/notebook_generated/
 data/laydown_configs/
-data/evaluations/
+data/evaluations/*
 data/datasets
-
+*.pkl
 
 .vscode
 /aegis
 /notebooks/Trainings
 */runs
 */saved_models
+agents/trained_agents/*
