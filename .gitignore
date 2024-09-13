@@ -163,4 +163,5 @@ data/datasets
 /notebooks/Trainings
 */runs
 */saved_models
+.profile
 agents/trained_agents/*

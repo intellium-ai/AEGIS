@@ -7,6 +7,8 @@ from typing import List
 
 class GLLMDataset(Dataset):
     def __init__(self, graphs, questions, gt_answers, llm: LLM):
+        raise NotImplementedError('This is now deprecated!')
+
         self.graphs = graphs
         self.questions = questions
         self.gt_answers = [
