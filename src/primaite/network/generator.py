@@ -490,7 +490,6 @@ class NetworkGenerator:
 
         # Create prompt data for GLLM
         node_str, services_str, node_services_str = self.get_prompt_data()
-        print('done!!')
         output_graph_data = self.create_output_graph_data()
         # add all the useful stuff to the graph output 🤢
         output_graph_data.reasoning = self.target_reasoning.reasoning
