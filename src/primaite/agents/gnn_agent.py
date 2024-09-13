@@ -20,15 +20,15 @@ device = "cuda:0"
 learning_rate = 0.005
 
 class GNNAgent(AgentSessionABC):
-    def __init__(self, training_config_path, lay_down_config_path):
+    def __init__(self, training_config_path, lay_down_config_path, save_path: str = None):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         print(self._training_config.agent_identifier)
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
         self.roll_out = []
-        self._setup()
+        self._setup(save_path=save_path)
 
-    def _setup(self):
+    def _setup(self, save_path: str = None):
 
         if not isinstance(self.session_path, Path):
             self.session_path = Path(self.session_path)
@@ -39,10 +39,12 @@ class GNNAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-    
-        self._agent = GraphEmbedding(
-            in_channels=6, output_dim=self._env.action_space.n, n_tokens=1, hidden_dim=128, device=device
-        ).to(device)
+        if save_path is None:
+            self._agent = GraphEmbedding(
+                in_channels=6, output_dim=self._env.action_space.n, n_tokens=1, hidden_dim=128, device=device
+            ).to(device)
+        else:
+            self._agent = GraphEmbedding.load(save_path)
 
 
         # Keep track of env history
@@ -65,7 +67,7 @@ class GNNAgent(AgentSessionABC):
         batch = Batch.from_data_list([data]).to(device)
         a_prob = self._agent(batch)
         
-        a_distrib = Categorical(torch.exp(a_prob))
+        a_distrib = Categorical(logits=a_prob)
         action = a_distrib.sample().item()
         return int(action)
 
@@ -121,8 +123,7 @@ class GNNAgent(AgentSessionABC):
                 data = self.create_graph(obs)
                 batch = Batch.from_data_list([data]).to(device)
                 a_prob = self._agent(batch).squeeze(0)
-
-                a_distrib = Categorical(torch.exp(a_prob))
+                a_distrib = Categorical(logits=a_prob)
                 action = a_distrib.sample().item()
 
                 obs, rewards, done, _ = self._env.step(action=int(action))
@@ -136,7 +137,6 @@ class GNNAgent(AgentSessionABC):
             loss, mean_reward = self.train_net(0.99)
             losses.append(loss)
             mean_rewards.append(mean_reward)
-            self._save_training_fig(losses, mean_rewards)
             self._env._write_av_reward_per_episode()
             self.save()
 
@@ -169,27 +169,13 @@ class GNNAgent(AgentSessionABC):
         self.roll_out = []
 
         return loss.cpu().detach().numpy(), mean_reward
-    
-    def _save_training_fig(self, losses, mean_rewards):
-        plt.plot(losses, label="Loss")
-        # plt.plot(mean_reward, label='Avg Reward')
-        plt.xlabel("Episode #")
-        plt.ylabel("Loss")
-        plt.savefig("./loss.png")
-
-        plt.close()
-        plt.plot(mean_rewards, label="Avg Reward")
-        plt.xlabel("Episode #")
-        plt.ylabel("Avg Reward")
-        plt.savefig("./avg_reward.png")
-        plt.close()
 
     def _get_latest_checkpoint(self):
         pass
 
     @classmethod
     def load(cls, path):
-        pass
+        return None
 
     def save(self):
         return None

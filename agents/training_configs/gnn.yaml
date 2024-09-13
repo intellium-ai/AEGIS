@@ -65,16 +65,16 @@ observation_space:
     # - name: ACCESS_CONTROL_LIST
 
 # Number of episodes for training to run per session
-num_train_episodes: 512
+num_train_episodes: 1
 
 # Number of time_steps for training per episode
-num_train_steps: 256
+num_train_steps: 128
 
 # Number of episodes for evaluation to run per session
-num_eval_episodes: 3
+num_eval_episodes: 1
 
 # Number of time_steps for evaluation per episode
-num_eval_steps: 15
+num_eval_steps: 128
 
 # Sets how often the agent will save a checkpoint (every n time episodes).
 # Set to 0 if no checkpoints are required. Default is 10

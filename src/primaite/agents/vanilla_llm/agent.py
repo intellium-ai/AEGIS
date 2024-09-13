@@ -15,6 +15,7 @@ from text_generation.types import Grammar, GrammarType
 
 from primaite import getLogger
 from primaite.action import NodeAction
+from transformers import AutoTokenizer
 from fireworks.client import Fireworks
 from primaite.agents.agent_abc import AgentSessionABC
 from primaite.agents.vanilla_llm.observation import get_obs_act_history_str, network_connectivity_desc, ObservedState
@@ -85,110 +86,141 @@ class FireworksLLM:
             response = {}
         return grammar(**response)
 
-    def _build_reasoning_prompt(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
-        prompt = ""
+class HFClient:
+    def __init__(self, base_url: str, timeout: int =120) -> None:
+        self.client = Client(base_url=base_url, timeout=timeout)
+        self.tokenizer = AutoTokenizer.from_pretrained('HuggingFaceTB/SmolLM-1.7B-Instruct')
+        
+    def generate_model(self, system: str, prompt: str, grammar, max_new_tokens: int = 1024, new_literals: Optional[Dict[str, List]] = None, repetition_penalty: float = 1.1) -> Type[T]:
+        
+        model_json = grammar.model_json_schema()
+        if new_literals:
+            # For each set of literals (referred to as enums) passed, add to the schema for the respective property.
+            for prop, enum in new_literals.items():
+                model_json["properties"][prop]["enum"] = enum
+        gram = Grammar(type=GrammarType.Json, value=model_json)
+        messages = []
+        prompt = prompt[:2000]
+        messages.append({'role': 'system', 'content': system})
+        messages.append({'role': 'user', 'content': prompt})
+        prompt_str = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        resp = self.client.generate(prompt_str, grammar=gram, max_new_tokens=max_new_tokens, repetition_penalty=repetition_penalty).generated_text
+        
+        try:
+            response_model = grammar(**json.loads(resp))
+        except:
+            response_model = grammar()
+        print('WE did it with SMOLLM!!')
+        return response_model
+        
+        
+        
+        
+        
+def _build_reasoning_prompt(obs_state: ObservedState, obs_history: list[ObservedState]) -> str:
+    prompt = ""
 
-        # Get the action space description
-        initial_state = obs_history[0]
-        network = initial_state.network
+    # Get the action space description
+    initial_state = obs_history[0]
+    network = initial_state.network
 
-        node_names = "'" + ", ".join([n.name for n in network.active_nodes]) + "'"  # Nice comma separated list
-        service_names = "'" + ", ".join(network.service_names) + "'"
+    node_names = "'" + ", ".join([n.name for n in network.active_nodes]) + "'"  # Nice comma separated list
+    service_names = "'" + ", ".join(network.service_names) + "'"
 
-        obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
+    obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
 
-        # Current observation space changes
-        _LOGGER.info(f"{colored('Observed changes', 'yellow')}: {obs_state.changes_str}\n\n")
+    # Current observation space changes
+    _LOGGER.info(f"{colored('Observed changes', 'yellow')}: {obs_state.changes_str}\n\n")
 
-        prompt = REASON_ACTION_SPACE_NODE_SELECT.format(
-            node_names=node_names,
-            service_names=service_names,
-            network_connectivity_desc=network_connectivity_desc(network),
-            initial_obs_view_full=initial_state.format(),
-            obs_act_history=obs_act_history,
-            current_obs_view_full=obs_state.format(),
-            current_obs_diff=obs_state.changes_str,
-            action_info=ACTION_INFO.format(service_names=service_names),
+    prompt = REASON_ACTION_SPACE_NODE_SELECT.format(
+        node_names=node_names,
+        service_names=service_names,
+        network_connectivity_desc=network_connectivity_desc(network),
+        initial_obs_view_full=initial_state.format(),
+        obs_act_history=obs_act_history,
+        current_obs_view_full=obs_state.format(),
+        current_obs_diff=obs_state.changes_str,
+        action_info=ACTION_INFO.format(service_names=service_names),
+    )
+
+    return prompt
+
+def _build_action_prompt(
+    obs_state: ObservedState, obs_history: list[ObservedState], node_name: str, reasoning: str
+) -> str:
+    prompt = ""
+
+    # Get the action space description
+    initial_state = obs_history[0]
+    network = initial_state.network
+    service_names = "'" + ", ".join(network.service_names) + "'"
+
+    obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
+
+    prompt = NODE_ACTION_SELECTION.format(
+        node_name=node_name,
+        reasoning=reasoning,
+        network_connectivity_desc=network_connectivity_desc(network),
+        initial_obs_view_full=initial_state.format(),
+        obs_act_history=obs_act_history,
+        current_obs_view_full=obs_state.format(),
+        current_obs_diff=obs_state.changes_str,
+        action_info=ACTION_INFO.format(service_names=service_names),
+    )
+
+    return prompt
+    
+def predict(llm: Tuple[FireworksLLM, HFClient], obs_state: ObservedState, obs_history: list[ObservedState]) -> Tuple[int, str, str]:
+
+    # Think and decide which node to act on
+    prompt = _build_reasoning_prompt(obs_state=obs_state, obs_history=obs_history)
+    network = obs_state.network
+    agent_reason_select = llm.generate_model(
+        prompt=prompt,
+        system=SYSTEM_MSG,
+        grammar=AgentReasoningNodeSelection,
+        new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
+        repetition_penalty=1.1,
+    )
+    
+    # Handle grammar errors
+    if not agent_reason_select.reasoning:
+        reasoning = 'NONE'
+    else:
+        reasoning = agent_reason_select.reasoning
+        
+    if not agent_reason_select.node_name:
+        node_selection = 'NONE'
+    else:
+        node_selection = agent_reason_select.node_name
+
+    # LLM chose to take an action on a node
+    if node_selection != "NONE":
+        # BUILD PROMPT HERE
+        prompt = _build_action_prompt(
+            obs_state=obs_state, obs_history=obs_history, reasoning=reasoning, node_name=node_selection
         )
-
-        return prompt
-
-    def _build_action_prompt(
-        self, obs_state: ObservedState, obs_history: list[ObservedState], node_name: str, reasoning: str
-    ) -> str:
-        prompt = ""
-
-        # Get the action space description
-        initial_state = obs_history[0]
-        network = initial_state.network
-        service_names = "'" + ", ".join(network.service_names) + "'"
-
-        obs_act_history = get_obs_act_history_str(obs_history=obs_history, max_history=MAX_PROMPT_OBS_HISTORY)
-
-        prompt = NODE_ACTION_SELECTION.format(
-            node_name=node_name,
-            reasoning=reasoning,
-            network_connectivity_desc=network_connectivity_desc(network),
-            initial_obs_view_full=initial_state.format(),
-            obs_act_history=obs_act_history,
-            current_obs_view_full=obs_state.format(),
-            current_obs_diff=obs_state.changes_str,
-            action_info=ACTION_INFO.format(service_names=service_names),
-        )
-
-        return prompt
-
-    def predict(self, obs_state: ObservedState, obs_history: list[ObservedState]) -> Tuple[int, str, str]:
-
-        # Think and decide which node to act on
-        prompt = self._build_reasoning_prompt(obs_state=obs_state, obs_history=obs_history)
-        network = obs_state.network
-        agent_reason_select = self.generate_model(
+        # rep penalty 1.1
+        agent_action = llm.generate_model(
             prompt=prompt,
             system=SYSTEM_MSG,
-            grammar=AgentReasoningNodeSelection,
+            grammar=AgentNodeAction,
             new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
             repetition_penalty=1.1,
         )
-        
-        # Handle grammar errors
-        if not agent_reason_select.reasoning:
-            reasoning = 'NONE'
-        else:
-            reasoning = agent_reason_select.reasoning
-            
-        if not agent_reason_select.node_name:
-            node_selection = 'NONE'
-        else:
-            node_selection = agent_reason_select.node_name
-
-        # LLM chose to take an action on a node
-        if node_selection != "NONE":
-            # BUILD PROMPT HERE
-            prompt = self._build_action_prompt(
-                obs_state=obs_state, obs_history=obs_history, reasoning=reasoning, node_name=node_selection
-            )
-            # rep penalty 1.1
-            agent_action = self.generate_model(
-                prompt=prompt,
-                system=SYSTEM_MSG,
-                grammar=AgentNodeAction,
-                new_literals={"node_name": [n.name for n in network.active_nodes] + ["NONE"]},
-                repetition_penalty=1.1,
-            )
-            try:
-                action = agent_action.to_node_action(network=network)
-                action_id = action.action_id
-            except BaseException:
-                _LOGGER.info(f"Invalid LLM action: {agent_action}")
-                action = NodeAction(network=network)
-                action_id = 0
-
-        # When the LLM chose to take no action
-        else:
+        try:
+            action = agent_action.to_node_action(network=network)
+            action_id = action.action_id
+        except BaseException:
+            _LOGGER.info(f"Invalid LLM action: {agent_action}")
             action = NodeAction(network=network)
             action_id = 0
-        return action_id, prompt, reasoning
+
+    # When the LLM chose to take no action
+    else:
+        action = NodeAction(network=network)
+        action_id = 0
+    return action_id, prompt, reasoning
 
 
 class LLMAgent(AgentSessionABC):
@@ -216,7 +248,9 @@ class LLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        self._agent = FireworksLLM(api_key=fireworks_api_key)
+        
+        self._agent = HFClient(base_url='http://192.168.0.68:58084', timeout=120)
+        # self._agent = FireworksLLM(api_key=fireworks_api_key)
 
         # Keep track of env history
         self.obs_history = [ObservedState.from_env(self._env)]
@@ -236,7 +270,7 @@ class LLMAgent(AgentSessionABC):
         prev_obs_state = self.obs_history[-1]
         curr_obs_state = ObservedState.from_env(self._env, prev_obs_state)
 
-        action_id, prompt, reasoning = self._agent.predict(curr_obs_state, self.obs_history)
+        action_id, prompt, reasoning = predict(llm=self._agent, obs_state=curr_obs_state, obs_history=self.obs_history)
         curr_obs_state.action = NodeAction.from_id(network=curr_obs_state.network, action_id=action_id)
         self.obs_history.append(curr_obs_state)
 
