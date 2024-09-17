@@ -1,3 +1,5 @@
+import json
+import os
 from typing import List, Tuple, Dict, Generator, Optional
 from functools import cached_property
 import warnings
@@ -7,7 +9,7 @@ from torch.distributions import Categorical
 
 from transformers import BitsAndBytesConfig, AutoTokenizer, AutoModelForCausalLM
 from peft.tuners.lora import LoraConfig
-from peft import PeftModelForCausalLM
+from peft import PeftModelForCausalLM, PeftModel, PeftConfig
 
 
 DEFAULT_DEVICE_MAP: dict = {
@@ -478,13 +480,37 @@ class LLM(torch.nn.Module):
         # Save Tokenizer
         self.tokenizer.init_kwargs.pop('torch_dtype', None)
         self.tokenizer.save_pretrained(path)
-
         # Save LLM
         self.model.save_pretrained(path)
+        init_kwargs = {
+            "device_map": self.device_map,
+        }
+
+        json.dump(init_kwargs, open(os.path.join(path, 'llm_init_kwargs.json'), 'w'))
 
     @classmethod
     def load(cls, path: str):
-        return cls(path)
+        # TODO: Is there a nicer way to do this? :)
+        adapter_config = json.load(open(os.path.join(path, 'adapter_config.json')))
+        peft_config = PeftConfig.from_peft_type(**adapter_config)
+        try:
+            init_kwargs = json.load(open(os.path.join(path, 'llm_init_kwargs.json')))
+            llm = cls(device_map=init_kwargs['device_map'], peft_config=peft_config)
+            device_map = init_kwargs['device_map']
+        except:
+            init_kwargs = {}
+            device_map = DEFAULT_DEVICE_MAP
+            llm = cls(peft_config=peft_config, device_map=device_map)
+        
+        base_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=adapter_config['base_model_name_or_path'], quantization_config=llm.bnb_config, torch_dtype=torch.float16, attn_implementation="sdpa", device_map=device_map)
+        print(llm.bnb_config)
+        peft_model = PeftModelForCausalLM.from_pretrained(base_model, path, is_trainable=True)
+        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=path, torch_dtype=torch.float16, padding=True, device_map='auto', padding_side='right')
+        
+        llm.model = peft_model
+        llm.tokenizer = tokenizer
+        llm.model.gradient_checkpointing_enable()
+        return llm
     
     @cached_property
     def device(self):

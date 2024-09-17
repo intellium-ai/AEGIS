@@ -38,19 +38,19 @@ class GLLM(torch.nn.Module):
         learning_rate: float = 0.005,
         peft_config: LoraConfig = default_peft_config,
         loss_fn: Literal["cosine", "crossentropy"] = "crossentropy",
-        do_tensorboard_logging: bool = True
+        do_tensorboard_logging: bool = True,
     ):
+        """model_path: Path to a pretrained model you want to continue training from."""
         super(GLLM, self).__init__()
 
         self.ge_device = ge_device
         self.model_name = model_name
         self.learning_rate = learning_rate
-
+        
         self.llm = LLM(
             model_name_or_path = self.model_name, 
             peft_config = peft_config
         )
-
         self.ge = GraphEmbedding(
             device = self.ge_device,
             in_channels = 6,
@@ -59,6 +59,8 @@ class GLLM(torch.nn.Module):
             n_gat_layers = 1,
             output_dim = self.llm.llm_embedding_size,
         ).to(self.ge_device)
+
+
 
         self.optimizer = Adafactor(self.parameters(), lr=self.learning_rate, relative_step=False)
         self.default_lr = learning_rate
@@ -82,7 +84,7 @@ class GLLM(torch.nn.Module):
         """This should return the action integer"""
         # 1.0 - Get the graph token(s)
         graph_embs = self.ge(graph_batch).to(torch.float16)
-        graph_embs = graph_embs.to(self.llm.embedding_device)
+        graph_embs = graph_embs.to(self.llm.device)
         graph_embs = self.llm._concat_graph_tags(graph_embs)  # Add <graph>...</graph>
 
         # 2.0 - Get the combined embeddings of graph and text tokens.
@@ -93,8 +95,8 @@ class GLLM(torch.nn.Module):
 
         # 3.0 - Generate the response
         token_ids, gllm_logits = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"].to(self.llm.embedding_device),
-            attention_mask=inputs["attention_mask"].to(self.llm.embedding_device),
+            inputs_embeds=inputs["inputs_embeds"].to(self.llm.device),
+            attention_mask=inputs["attention_mask"].to(self.llm.device),
             max_new_tokens=150,
             restrict_output=False,
             grad=True,
@@ -169,6 +171,7 @@ class GLLM(torch.nn.Module):
         lr: float = None,
         gradient_accumulation_steps: int = 1,
         save_every_n_epochs: int = None,
+        save_every_n_steps: int = None,
         progress_bar: bool = True,
         do_profile: bool = False,
     ):
@@ -239,7 +242,11 @@ class GLLM(torch.nn.Module):
                     profiler.dump_stats('profiler_stats')
                     profiler.print_stats()
                     exit()
-
+                # Save model if required
+                if save_every_n_steps:
+                    if self.global_step % save_every_n_steps == 0:
+                        run_name = self.writer.get_logdir() if self.do_tensorboard_logging else run_timestamp
+                        self.save('./' + os.path.join(os.curdir, run_name, f'epoch_{self.global_epoch}-step_{self.global_step}'))
             # Log Epoch Metrics
             epoch_train_loss /= len(train_dataloader.dataset)
 
@@ -254,13 +261,17 @@ class GLLM(torch.nn.Module):
             if save_every_n_epochs:
                 if self.global_epoch % save_every_n_epochs == 0:
                     run_name = self.writer.get_logdir() if self.do_tensorboard_logging else run_timestamp
-                    self.save(os.path.join(os.curdir, '/runs/', run_name, f'epoch_{self.global_epoch}'))
+                    self.save('./' + os.path.join(os.curdir, run_name, f'epoch_{self.global_epoch}'))
 
             self.global_epoch += 1
 
     @classmethod
     def load(cls, path):
-        raise NotImplementedError
+        gllm = cls()
+        gllm.ge = GraphEmbedding.load(path)
+        gllm.llm = LLM.load(path)
+        return gllm
+        
 
     def save(self, path: str) -> None:
         self.llm.save(path)
