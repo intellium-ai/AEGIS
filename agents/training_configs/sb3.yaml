@@ -24,13 +24,13 @@ deep_learning_framework: TF2
 # "DO_NOTHING" (The DoNothing agents coupled with an ACL or NODE action_type)
 # "RANDOM" (primaite.agents.simple.RandomAgent)
 # "DUMMY" (primaite.agents.simple.DummyAgent)
-agent_identifier: A2C
+agent_identifier: PPO
 
 # Sets whether Red Agent POL and IER is randomised.
 # Options are:
 # True
 # False
-random_red_agent: False
+random_red_agent: True
 
 # The (integer) seed to be used in random number generation
 # Default is None (null)
@@ -67,7 +67,7 @@ observation_space:
 load_agent: True
 
 # Number of episodes for training to run per session
-num_train_episodes: 512
+num_train_episodes: 2
 
 # Number of time_steps for training per episode
 num_train_steps: 128
