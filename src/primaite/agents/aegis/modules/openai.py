@@ -18,7 +18,7 @@ class LLMMessage:
 
 class OpenAIClient():
 
-    def __init__(self, api_key: str, model: str = "gpt-4-turbo-preview"):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
         """Client to use OpenAI models
 
         Args:
@@ -66,7 +66,7 @@ class OpenAIClient():
 
 
     def generate_model(
-        self, prompt: str, grammar: Type[T], max_new_tokens: int = 2048, model: str = "gpt-3.5-turbo"
+        self, prompt: str, grammar: Type[T], max_new_tokens: int = 2048, model: str = "gpt-4o-mini"
     ) -> Type[T]:
 
         messages = [{"role": "user", "content": prompt}]

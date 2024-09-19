@@ -17,13 +17,12 @@ from primaite.environment.primaite_env import Primaite
 _LOGGER: Logger = getLogger(__name__)
 
 device = "cuda:0"
-learning_rate = 0.005
+learning_rate = 0.0005
 
 class GNNAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path, save_path: str = None):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
-        print(self._training_config.agent_identifier)
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
         self.roll_out = []
         self._setup(save_path=save_path)
@@ -39,12 +38,10 @@ class GNNAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-        if save_path is None:
-            self._agent = GraphEmbedding(
-                in_channels=6, output_dim=self._env.action_space.n, n_tokens=1, hidden_dim=128, device=device
-            ).to(device)
-        else:
-            self._agent = GraphEmbedding.load(save_path)
+    
+        self._agent = GraphEmbedding(
+            in_channels=6, output_dim=721, n_tokens=1, hidden_dim=128, device=device
+        ).to(device)
 
 
         # Keep track of env history
@@ -93,9 +90,14 @@ class GNNAgent(AgentSessionABC):
             done, steps, rew = False, 0, 0
 
             while steps < time_steps and not done:
-
+                print(steps)
                 action = self._calculate_action(obs)
-                obs, rewards, done, _ = self._env.step(action=action)
+                if int(action) >= int(self._env.action_space.n):
+                    print('Illegal action produced. Selecting 0 and setting reward to high negative value')
+                    rewards = np.float32(-0.025)
+                    obs, rewards, done, _ = self._env.step(action=0)
+                else:
+                    obs, rewards, done, _ = self._env.step(action=int(action))
                 steps += 1
                 rew += rewards
 
@@ -125,8 +127,13 @@ class GNNAgent(AgentSessionABC):
                 a_prob = self._agent(batch).squeeze(0)
                 a_distrib = Categorical(logits=a_prob)
                 action = a_distrib.sample().item()
-
-                obs, rewards, done, _ = self._env.step(action=int(action))
+                if int(action) >= int(self._env.action_space.n):
+                    print(f'Illegal action produced. Selecting 0 and setting reward to high negative value: {int(action)} {int(self._env.action_space.n)}')
+                    rewards = np.float32(-0.025)
+                    obs, rewards, done, _ = self._env.step(action=0)
+                else:
+                    print(f'Legal action produced. {int(action)} {int(self._env.action_space.n)}')
+                    obs, rewards, done, _ = self._env.step(action=int(action))
                 
                 self.put_data((rewards, a_prob[0][action]))
 

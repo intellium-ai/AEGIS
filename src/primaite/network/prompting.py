@@ -65,7 +65,7 @@ This is the initial configuration of the network:
 
 As an agent, you are able to influence the state of this node by switching it on or off, resetting it, patching software or patching any of its services.
 
-Please think about the network configuration and the state of each node. Think about which nodes are most vulnerable to attack and which node requires action the most in order to stop the attack and prevent further spread. Provide your reasoning statement and select a node by name to perform a defensive action on. If no action is required because all is well, you can simply say 'NONE', but always provide a reasoning statement.
+Please think about the network configuration and the state of each node. Think about which nodes are most vulnerable to attack and which node requires action the most in order to stop the attack and prevent further spread. Provide your reasoning statement and select a node by name to perform a defensive action on. If no action is required because all is well, you can simply say 'NONE', but always provide a reasoning statement. Your reasoning statement MUST be brief and concisely communicate your thoughts. Try to avoid using any more than two sentences in your reasoning statement.
 
 If action is not required at the moment, set NONE as the node_name, but always reason over the state of the network.
 Note that actions are expensive and can negatively impact the environment if used improperly. For instance, a server which is turned off cannot receive requests from the users and will decrease the reward.  

@@ -182,7 +182,7 @@ def generate():
 state.is_dataset = st.sidebar.toggle(label="Generate Dataset", value=state.is_dataset)
 
 if state.is_dataset:
-    state.generate_dataset_params["size"] = st.sidebar.slider(label="Dataset Size", min_value=1, max_value=20, value=state.generate_dataset_params["size"])
+    state.generate_dataset_params["size"] = st.sidebar.slider(label="Dataset Size", min_value=1, max_value=10000, value=state.generate_dataset_params["size"])
 
 
 # ----------------------------------- HEADING

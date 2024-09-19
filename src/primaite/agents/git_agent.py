@@ -127,7 +127,7 @@ class GITAgent(AgentSessionABC):
 
         # Get stringified node map, service map, node services, observation and action history and current observation difference for prompt
         node_str = "\n".join(f"{key}: {value}" for key, value in self.node_mapping.items())  # ID: NODE_NAME
-        services_str = "\n".join(f"{i}: {service}" for i, service in enumerate(self.service_mapping))
+        services_str = "\n".join(f"{i+ 1}: {self.service_mapping[i+1]}" for i, _ in enumerate(self.service_mapping))
         node_services_str = "\n".join(
             f"{key}: {', '.join(str(val) for val in value) if value else 'NONE'}"
             for key, value in node_services.items()
