@@ -159,6 +159,10 @@ class RLlibAgent(AgentSessionABC):
             horizon=self._training_config.num_train_steps,
         )
         self._agent: Algorithm = self._agent_config.build(logger_creator=_custom_log_creator(self.learning_path))
+        
+        self._env: Primaite = Primaite(
+            self._training_config_path, self._lay_down_config_path, self.session_path, self.timestamp_str
+        )
 
     def _save_checkpoint(self) -> None:
         checkpoint_n = self._training_config.checkpoint_every_n_episodes

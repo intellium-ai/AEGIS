@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge
+from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge, global_mean_pool
 from torch_geometric.data.batch import Batch
 import logging
 import json
@@ -41,7 +41,7 @@ class GraphEmbedding(nn.Module):
         else:
             x = x
 
-        x = global_add_pool(x=x, batch=graph_batch.batch.to(self.device))
+        x = global_mean_pool(x=x, batch=graph_batch.batch.to(self.device))
         x = F.relu(x)
         x = self.linear(x)
         x = x.view(graph_batch.batch_size, self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)
