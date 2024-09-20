@@ -60,16 +60,16 @@ class GLLM(torch.nn.Module):
             output_dim = self.llm.llm_embedding_size,
         ).to(self.ge_device)
 
+        self.optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=0.001)
 
-
-        self.optimizer = Adafactor(self.parameters(), lr=self.learning_rate, relative_step=False)
         self.default_lr = learning_rate
         
         self.do_tensorboard_logging = do_tensorboard_logging
         if do_tensorboard_logging:
             self.writer = SummaryWriter(flush_secs=15)
-            self.global_step = 0
-            self.global_epoch = 0
+
+        self.global_step = 0
+        self.global_epoch = 0
 
 
         if loss_fn ==  "crossentropy":
@@ -121,8 +121,12 @@ class GLLM(torch.nn.Module):
         # Construct mock logprobs for gt repsonse
         gt_tokens = self.llm.tokenizer.batch_encode_plus(texts, return_tensors="pt", padding=True)["input_ids"].to(device)
 
+        # Add eos tokens to end of sequences
+        eos_tokens = torch.full((gt_tokens.shape[0], 1), fill_value=2, dtype=gt_tokens.dtype, device=gt_tokens.device)
+        gt_tokens = torch.cat([gt_tokens, eos_tokens], dim=1)
+
         # [batch_size, seq_length, vocab_size]
-        gt_logits = torch.zeros((gt_tokens.shape[0], gt_tokens.shape[1], len(self.llm.tokenizer)), dtype=torch.float16, device=device)
+        gt_logits = torch.zeros((gt_tokens.shape[0], gt_tokens.shape[1], len(self.llm.tokenizer)), dtype=torch.float32, device=device)
         gt_logits.scatter_(2, gt_tokens.unsqueeze(-1), 100.0)
 
         return gt_tokens, gt_logits
@@ -141,9 +145,11 @@ class GLLM(torch.nn.Module):
     def _crossentropy_loss(
             self, 
             gt_logits: torch.Tensor, 
-            gllm_logits: torch.Tensor, 
+            gt_tokens: torch.Tensor,
+            gllm_logits: torch.Tensor,
+            gllm_tokens: torch.Tensor, 
             *args, **kwargs
-    ) -> torch.Tensor:
+    ) -> torch.Tensor:        
         padding_logit = torch.zeros([len(self.llm.tokenizer)], device=gllm_logits.device, dtype=torch.float32)
         padding_logit[self.llm.tokenizer.pad_token_id] = (
             100.0 
@@ -153,23 +159,38 @@ class GLLM(torch.nn.Module):
         if gt_logits.shape[1] > gllm_logits.shape[1]:
             # gt sequences are longer - truncate the gt responses
             gt_logits = gt_logits[:, : gllm_logits.shape[1], :]
+            gt_tokens = gt_tokens[:, : gllm_logits.shape[1]]
 
         elif gllm_logits.shape[1] > gt_logits.shape[1]:
             # gllm sequences are longer - pad openai responses
-            n_pads = gllm_logits.shape[1] - gt_logits.shape[1]
-            padding_logits = padding_logit.repeat(batch_size, n_pads, 1)
+            #n_pads = gllm_logits.shape[1] - gt_logits.shape[1]
+            #padding_logits = padding_logit.repeat(batch_size, n_pads, 1)
+            #gt_logits = torch.cat([gt_logits, padding_logits], dim=1)
 
-            gt_logits = torch.cat([gt_logits, padding_logits], dim=1)
+            # changed to truncating either scenario
+            gllm_logits = gllm_logits[:, : gt_logits.shape[1], :]
+            gllm_tokens = gllm_tokens[:, : gt_logits.shape[1]]
+
+        # find which tokens are padding but not the first eos token and exclude from loss calc
+        pad_mask = torch.logical_or(gt_tokens == 2, gllm_tokens == 2)
+        for seq_idx in range(gt_tokens.shape[0]):
+            first_pad_idx = torch.nonzero(pad_mask[seq_idx])[0]
+            pad_mask[seq_idx, first_pad_idx] = False
+
+        gllm_logits = gllm_logits[torch.logical_not(pad_mask)]
+        gt_logits = gt_logits[torch.logical_not(pad_mask)]
+
+        loss = torch.nn.functional.cross_entropy(gllm_logits, gt_logits)
 
         # Calculate the cross entropy loss - transpose the 1 and 2 dimensions because we want a loss value per token not per vocab
-        return torch.nn.functional.cross_entropy(gllm_logits.transpose(1, 2), gt_logits.transpose(1, 2))
+        #return torch.nn.functional.cross_entropy(gllm_logits.transpose(1, 2), gt_logits.transpose(1, 2))
+        return loss
 
     def train_model(
         self,
         train_dataloader: DataLoader,
         n_epochs: int = 10,
         lr: float = None,
-        gradient_accumulation_steps: int = 1,
         save_every_n_epochs: int = None,
         save_every_n_steps: int = None,
         progress_bar: bool = True,
@@ -218,13 +239,15 @@ class GLLM(torch.nn.Module):
                 # Calc loss
                 loss = self.loss_fn(
                     gt_logits=gt_logits,
+                    gt_tokens=gt_tokens,
                     gllm_logits=gllm_logits,
+                    gllm_tokens=gllm_tokens,
                 )
 
                 loss.backward()
-                torch.cuda.empty_cache()
 
-                if self.global_step % gradient_accumulation_steps == 0:
+                if ((self.global_step + 1) % 4 == 0) or (self.global_step + 1 == len(train_dataloader)):
+                    torch.nn.utils.clip_grad_norm_(self.parameters(), 0.3)
                     self.optimizer.step()
                     self.optimizer.zero_grad()
 
@@ -232,8 +255,10 @@ class GLLM(torch.nn.Module):
                 if self.do_tensorboard_logging:
                     self.writer.add_scalar('step/train_loss', loss.detach().cpu().item(), global_step=self.global_step)
                     self.writer.add_text('step/text_response', txt_responses[-1], global_step=self.global_step)
+                    self.writer.add_scalar('step/train_tok_acc', step_tokens_correct / step_tokens_total, global_step=self.global_step)
+
                 epoch_text_lengths += [len(response) for response in txt_responses]
-                epoch_train_loss += loss.detach().cpu().item() * batch.batch_size
+                epoch_train_loss += loss.detach().cpu().item()
 
                 self.global_step += 1
 
@@ -248,10 +273,8 @@ class GLLM(torch.nn.Module):
                         run_name = self.writer.get_logdir() if self.do_tensorboard_logging else run_timestamp
                         self.save('./' + os.path.join(os.curdir, run_name, f'epoch_{self.global_epoch}-step_{self.global_step}'))
             # Log Epoch Metrics
-            epoch_train_loss /= len(train_dataloader.dataset)
-
             if self.do_tensorboard_logging:
-                self.writer.add_scalar('epoch/train_loss', epoch_train_loss, global_step=self.global_epoch)
+                self.writer.add_scalar('epoch/train_loss', epoch_train_loss / len(train_dataloader), global_step=self.global_epoch)
                 self.writer.add_scalar('epoch/train_tok_acc', tokens_correct / tokens_total, global_step=self.global_epoch)
                 self.writer.add_histogram('epoch/reasoning_lengths', np.array(epoch_text_lengths), global_step=self.global_epoch)
 
@@ -269,7 +292,9 @@ class GLLM(torch.nn.Module):
     def load(cls, path):
         gllm = cls()
         gllm.ge = GraphEmbedding.load(path)
-        gllm.llm = LLM.load(path)
+        gllm.llm = LLM(model_name_or_path=path)
+        gllm.optimizer.load_state_dict(torch.load(os.path.join(path, 'git_agent_optim_state.pt')))
+        gllm.optimizer = torch.optim.AdamW(gllm.parameters(), lr=gllm.learning_rate)
         return gllm
         
 
