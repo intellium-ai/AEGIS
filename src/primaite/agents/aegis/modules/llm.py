@@ -68,10 +68,17 @@ class LLM(torch.nn.Module):
             attn_implementation="sdpa"
         )
 
-        self.model: PeftModelForCausalLM = PeftModelForCausalLM(
-            model=model,
-            peft_config=peft_config
-        )
+        if peft_config:
+            self.model : PeftModelForCausalLM = PeftModelForCausalLM(
+                model=model,
+                peft_config=peft_config
+            )
+        else:
+            self.model: PeftModelForCausalLM = PeftModelForCausalLM.from_pretrained(
+                model=model,
+                model_id=model_name_or_path,
+                is_trainable=True
+            )
 
         self.device_map = device_map
 
@@ -266,7 +273,6 @@ class LLM(torch.nn.Module):
 
         n_tokens = 0
         stop_generating = False
-        per_token_attention = torch.ones((inputs_embeds.shape[0], 1), device=device, dtype=torch.bool)
         attention_mask = attention_mask.to(torch.bool)
 
         # Generate until max_new_tokens reached
@@ -280,11 +286,12 @@ class LLM(torch.nn.Module):
                 output = self.model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
 
             # Figure out which logits in the sequence to sample from (the right-most significant token determined with the attention mask)
-            last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
-            last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
+            #last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
+            #last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
 
             # Get next logits for each input sequence
-            logits = output.logits[torch.arange(inputs_embeds.size(0), device=device), last_non_pad_indices].unsqueeze(1)
+            #logits = output.logits[torch.arange(inputs_embeds.size(0), device=device), last_non_pad_indices].unsqueeze(1)
+            logits = output.logits[:, -1, :].unsqueeze(1)
 
             # Apply restriction on the output logits (or don't)
             if restrict_output:
@@ -321,7 +328,7 @@ class LLM(torch.nn.Module):
             # Add the new token to the inputs_embeds and expand the attention mask accordingly
             # TODO: For sequences that are complete, don't generate more tokens for them to save on compute (they get binned anyway when replaced with EOS)
             inputs_embeds = torch.cat([inputs_embeds, new_embeddings], dim=1)
-            attention_mask = torch.cat([attention_mask, per_token_attention], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.logical_not(sequences_terminated).unsqueeze(1)], dim=1)
 
             n_tokens += 1
 
@@ -490,6 +497,14 @@ class LLM(torch.nn.Module):
 
     @classmethod
     def load(cls, path: str):
+        # init_kwargs = json.load(open(os.path.join(path, 'llm_init_kwargs.json')))
+
+        return cls(model_name_or_path=path)
+
+        return cls(model_name_or_path=path, **init_kwargs)
+    
+        # sorry John
+
         # TODO: Is there a nicer way to do this? :)
         adapter_config = json.load(open(os.path.join(path, 'adapter_config.json')))
         peft_config = PeftConfig.from_peft_type(**adapter_config)
