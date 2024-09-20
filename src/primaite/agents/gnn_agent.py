@@ -104,7 +104,7 @@ class GNNAgent(AgentSessionABC):
             ep_rewards.append(self._env.average_reward)
         self._env.close()
         super().evaluate()
-        return np.mean(ep_rewards)
+        return ep_rewards
     
     def put_data(self, data):
         self.roll_out.append(data)

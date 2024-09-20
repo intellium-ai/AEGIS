@@ -158,9 +158,13 @@ class SB3Agent(AgentSessionABC):
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
         _LOGGER.info(f"Beginning learning for {episodes} episodes @" f" {time_steps} time steps...")
+        ep_rewards = []
         for i in range(episodes):
             self._agent.learn(total_timesteps=time_steps)
+            self._env.average_reward
+            ep_rewards.append(self._env.average_reward)
             self._save_checkpoint()
+
         self._env._write_av_reward_per_episode()  # noqa
         self.save()
         self._env.close()
@@ -170,6 +174,7 @@ class SB3Agent(AgentSessionABC):
         self.save()
 
         self._plot_av_reward_per_episode(learning_session=True)
+        return ep_rewards
 
     def _calculate_action(self, obs: np.ndarray) -> int:
         action, _states = self._agent.predict(obs, deterministic=self._training_config.deterministic)
@@ -180,7 +185,7 @@ class SB3Agent(AgentSessionABC):
     def evaluate(
         self,
         **kwargs: Any,
-    ) -> None:
+    ) -> np.float32:
         """
         Evaluate the agent.
 
@@ -208,9 +213,8 @@ class SB3Agent(AgentSessionABC):
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
-        return np.mean(ep_rewards)
-    
-    
+        return ep_rewards
+
     def save(self) -> None:
         """Save the agent."""
         self._agent.save(self._saved_agent_path)

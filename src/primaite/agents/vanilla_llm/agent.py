@@ -230,13 +230,13 @@ class LLMAgent(AgentSessionABC):
         prompt: str
         reasoning: str
 
-    def __init__(self, training_config_path, lay_down_config_path, fireworks_api_key: str):
+    def __init__(self, training_config_path, lay_down_config_path, fireworks_api_key: str = None, base_url: str = None):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.LLM
-        self._setup(fireworks_api_key)
+        self._setup(fireworks_api_key, base_url)
 
-    def _setup(self, fireworks_api_key: str):
+    def _setup(self, fireworks_api_key: str = None, base_url: str = None):
         super()._setup()
 
         if not isinstance(self.session_path, Path):
@@ -248,9 +248,13 @@ class LLMAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
+        if fireworks_api_key:
+            self._agent = FireworksLLM(api_key=fireworks_api_key)
+        elif base_url:
+            self._agent = HFClient(base_url=base_url, timeout=120)
+        else:
+            raise ValueError("Must provide either `fireworks_api_key` or `base_url`")
         
-        self._agent = HFClient(base_url='http://192.168.0.68:58084', timeout=120)
-        # self._agent = FireworksLLM(api_key=fireworks_api_key)
 
         # Keep track of env history
         self.obs_history = [ObservedState.from_env(self._env)]
@@ -308,7 +312,7 @@ class LLMAgent(AgentSessionABC):
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
-        return np.mean(ep_rewards)
+        return ep_rewards
     def _get_latest_checkpoint(self):
         pass
 
