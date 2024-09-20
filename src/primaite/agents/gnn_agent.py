@@ -19,6 +19,7 @@ _LOGGER: Logger = getLogger(__name__)
 device = "cuda:0"
 learning_rate = 0.0005
 
+
 class GNNAgent(AgentSessionABC):
     def __init__(self, training_config_path, lay_down_config_path, save_path: str = None):
         super().__init__(training_config_path, lay_down_config_path)
@@ -38,11 +39,10 @@ class GNNAgent(AgentSessionABC):
             session_path=self.session_path,
             timestamp_str=self.timestamp_str,
         )
-    
-        self._agent = GraphEmbedding(
-            in_channels=6, output_dim=721, n_tokens=1, hidden_dim=128, device=device
-        ).to(device)
 
+        self._agent = GraphEmbedding(in_channels=6, output_dim=721, n_tokens=1, hidden_dim=128, device=device).to(
+            device
+        )
 
         # Keep track of env history
         super()._setup()
@@ -56,14 +56,14 @@ class GNNAgent(AgentSessionABC):
     def create_graph(self, obs):
         graph = prepare_graph(self._env.network)
         state = from_networkx(graph)
-        state.x = torch.tensor(obs[:self._env.num_nodes, 1:], dtype=torch.float32).to(device)
+        state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(device)
         return state
 
     def _calculate_action(self, obs) -> int:
         data = self.create_graph(obs)
         batch = Batch.from_data_list([data]).to(device)
         a_prob = self._agent(batch)
-        
+
         a_distrib = Categorical(logits=a_prob)
         action = a_distrib.sample().item()
         return int(action)
@@ -78,7 +78,7 @@ class GNNAgent(AgentSessionABC):
         :param kwargs: Any agent-specific key-word args to be passed.
         """
         ep_rewards = []
-        
+
         time_steps = self._training_config.num_eval_steps
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
@@ -93,7 +93,7 @@ class GNNAgent(AgentSessionABC):
                 print(steps)
                 action = self._calculate_action(obs)
                 if int(action) >= int(self._env.action_space.n):
-                    print('Illegal action produced. Selecting 0 and setting reward to high negative value')
+                    print("Illegal action produced. Selecting 0 and setting reward to high negative value")
                     rewards = np.float32(-0.025)
                     obs, rewards, done, _ = self._env.step(action=0)
                 else:
@@ -101,21 +101,21 @@ class GNNAgent(AgentSessionABC):
                 steps += 1
                 rew += rewards
 
-            ep_rewards.append(self._env.average_reward)
+            ep_rewards.append(self._env.total_reward)
         self._env.close()
         super().evaluate()
         return ep_rewards
-    
+
     def put_data(self, data):
         self.roll_out.append(data)
-        
+
     def learn(self, **kwargs):
         time_steps = self._training_config.num_train_steps
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
         losses = []
-        mean_rewards = []
-        
+        sum_rewards = []
+
         self.optimizer = optim.Adam(self._agent.parameters(), lr=learning_rate)
         for ep in range(episodes):
             obs = self._env.reset()
@@ -128,22 +128,24 @@ class GNNAgent(AgentSessionABC):
                 a_distrib = Categorical(logits=a_prob)
                 action = a_distrib.sample().item()
                 if int(action) >= int(self._env.action_space.n):
-                    print(f'Illegal action produced. Selecting 0 and setting reward to high negative value: {int(action)} {int(self._env.action_space.n)}')
+                    print(
+                        f"Illegal action produced. Selecting 0 and setting reward to high negative value: {int(action)} {int(self._env.action_space.n)}"
+                    )
                     rewards = np.float32(-0.025)
                     obs, rewards, done, _ = self._env.step(action=0)
                 else:
-                    print(f'Legal action produced. {int(action)} {int(self._env.action_space.n)}')
+                    print(f"Legal action produced. {int(action)} {int(self._env.action_space.n)}")
                     obs, rewards, done, _ = self._env.step(action=int(action))
-                
+
                 self.put_data((rewards, a_prob[0][action]))
 
                 steps += 1
                 rew += rewards
                 self._save_checkpoint()
 
-            loss, mean_reward = self.train_net(0.99)
+            loss, sum_reward = self.train_net(0.99)
             losses.append(loss)
-            mean_rewards.append(mean_reward)
+            sum_rewards.append(sum_reward)
             self._env._write_av_reward_per_episode()
             self.save()
 
@@ -151,7 +153,7 @@ class GNNAgent(AgentSessionABC):
         super().learn()
 
         self._plot_av_reward_per_episode(True)
-        
+
     def train_net(self, gamma):
         R = 0
         G = []
@@ -172,7 +174,7 @@ class GNNAgent(AgentSessionABC):
             loss = -prob * ((R - G_mean) / G_std)
             loss.backward()
         self.optimizer.step()
-        mean_reward = np.mean([rew[0] for rew in self.roll_out])
+        mean_reward = np.sum([rew[0] for rew in self.roll_out])
         self.roll_out = []
 
         return loss.cpu().detach().numpy(), mean_reward

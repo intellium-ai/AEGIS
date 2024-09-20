@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional, Union, Type
+from typing import Any, Optional, Union, Type, List
 
 import numpy as np
 from stable_baselines3.a2c.a2c import A2C
@@ -148,7 +148,7 @@ class SB3Agent(AgentSessionABC):
     def learn(
         self,
         **kwargs: Any,
-    ) -> None:
+    ) -> List:
         """
         Train the agent.
 
@@ -162,7 +162,7 @@ class SB3Agent(AgentSessionABC):
         for i in range(episodes):
             self._agent.learn(total_timesteps=time_steps)
             self._env.average_reward
-            ep_rewards.append(self._env.average_reward)
+            ep_rewards.append(self._env.total_reward)
             self._save_checkpoint()
 
         self._env._write_av_reward_per_episode()  # noqa
@@ -185,7 +185,7 @@ class SB3Agent(AgentSessionABC):
     def evaluate(
         self,
         **kwargs: Any,
-    ) -> np.float32:
+    ) -> List:
         """
         Evaluate the agent.
 
@@ -209,7 +209,7 @@ class SB3Agent(AgentSessionABC):
             for step in range(time_steps):
                 action = self._calculate_action(obs)
                 obs, rewards, done, info = self._env.step(action)
-            ep_rewards.append(self._env.average_reward)
+            ep_rewards.append(self._env.total_reward)
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
