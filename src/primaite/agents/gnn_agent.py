@@ -5,6 +5,7 @@ from typing import Any
 import os
 import datetime
 import numpy as np
+import json
 
 import torch
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -27,6 +28,9 @@ logging.getLogger().setLevel(logging.INFO)
 
 class Actor(nn.Module):
     def __init__(self, hidden_dim, n_gat_layers: int = 3, device: str = "cuda:0"):
+        self.hidden_dim = hidden_dim
+        self.n_gat_layers = n_gat_layers
+        self.device = device
         super().__init__()
         self.gat = GATConv(in_channels=6, out_channels=hidden_dim)
         self.inner_gat = GATConv(in_channels=hidden_dim, out_channels=hidden_dim)
@@ -70,9 +74,33 @@ class Actor(nn.Module):
         torch.nn.init.normal_(self.linear.weight, 0.01, 0.1)
         torch.nn.init.zeros_(self.linear.bias)
 
+    def save(self, path: str) -> None:
+        # Save init arguments
+        init_kwargs = {
+            "n_gat_layers": self.n_gat_layers,
+            "hidden_dim": self.hidden_dim,
+            "device": self.device,
+        }
+
+        json.dump(init_kwargs, open(os.path.join(path, "actor_init_kwargs.json"), "w"))
+
+        # Save model
+        torch.save(self.state_dict(), os.path.join(path, "actor.pt"))
+
+    @classmethod
+    def load(cls, path: str):
+        init_kwargs = json.load(open(os.path.join(path, "actor_init_kwargs.json")))
+        ge = cls(**init_kwargs)
+        ge.load_state_dict(torch.load(os.path.join(path, "actor.pt")))
+        return ge.to(ge.device)
+
 
 class Critic(nn.Module):
     def __init__(self, hidden_dim, n_gat_layers: int = 3, device: str = "cuda:0"):
+        self.hidden_dim = hidden_dim
+        self.n_gat_layers = n_gat_layers
+        self.device = device
+
         super().__init__()
         self.gat = GATConv(in_channels=6, out_channels=hidden_dim)
         self.inner_gat = GATConv(in_channels=hidden_dim, out_channels=hidden_dim)
@@ -109,6 +137,26 @@ class Critic(nn.Module):
     def init_weights(self):
         torch.nn.init.normal_(self.linear.weight, 1.0, 0.1)
         torch.nn.init.zeros_(self.linear.bias)
+
+    def save(self, path: str) -> None:
+        # Save init arguments
+        init_kwargs = {
+            "n_gat_layers": self.n_gat_layers,
+            "hidden_dim": self.hidden_dim,
+            "device": self.device,
+        }
+
+        json.dump(init_kwargs, open(os.path.join(path, "critic_init_kwargs.json"), "w"))
+
+        # Save model
+        torch.save(self.state_dict(), os.path.join(path, "critic.pt"))
+
+    @classmethod
+    def load(cls, path: str):
+        init_kwargs = json.load(open(os.path.join(path, "critic_init_kwargs.json")))
+        ge = cls(**init_kwargs)
+        ge.load_state_dict(torch.load(os.path.join(path, "critic.pt")))
+        return ge.to(ge.device)
 
 
 class GNNAgent(AgentSessionABC):
@@ -180,7 +228,7 @@ class GNNAgent(AgentSessionABC):
         state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(self.device)
         return state
 
-    def evaluate(self, time_steps: int = 128, episodes: int = 20, **kwargs):
+    def evaluate(self, time_steps: int = 128, episodes: int = 128, **kwargs):
         self.is_eval = True
 
         global_step = 0
@@ -223,7 +271,6 @@ class GNNAgent(AgentSessionABC):
                 obs = new_obs
 
             reward_per_ep.append(np.sum(episode_rewards))
-        # self._env.close()
 
         return reward_per_ep
 
@@ -315,9 +362,6 @@ class GNNAgent(AgentSessionABC):
 
     def _get_latest_checkpoint(self) -> None:
         return  # super()._get_latest_checkpoint()
-
-    def evaluate(self, **kwargs: Any) -> None:
-        return  # super().evaluate(**kwargs)
 
     @classmethod
     def load(cls, path):
