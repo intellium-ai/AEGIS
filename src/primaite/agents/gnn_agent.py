@@ -12,12 +12,12 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 from torch import nn
+from torch.distributions import Categorical
 from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge, global_mean_pool
 from torch_geometric.data.batch import Batch
 
 from primaite import getLogger
 from primaite.agents.aegis.modules.ge import GraphEmbedding
-from torch_geometric.data.batch import Batch
 from primaite.agents.agent_abc import AgentSessionABC
 from primaite.agents.utils import from_networkx, prepare_graph
 from primaite.common.enums import AgentFramework, AgentIdentifier
@@ -25,6 +25,8 @@ from primaite.environment.primaite_env import Primaite
 
 logging.getLogger().setLevel(logging.INFO)
 
+# Maximum number of nodes in any input graph
+N_MAX = 50
 
 class Actor(nn.Module):
     def __init__(self, hidden_dim, n_gat_layers: int = 3, device: str = "cuda:0"):
@@ -36,7 +38,7 @@ class Actor(nn.Module):
         self.inner_gat = GATConv(in_channels=hidden_dim, out_channels=hidden_dim)
         self.layer_norm = LayerNorm(hidden_dim)
         self.jumping_knowledge = JumpingKnowledge(mode="max")
-        self.linear = nn.Linear(in_features=hidden_dim, out_features=50+3+3+3)
+        self.linear = nn.Linear(in_features=hidden_dim, out_features=N_MAX + 1 + 4 + 4 + 3)
         self.device = device
         self.n_gat_layers = n_gat_layers
 
@@ -63,12 +65,13 @@ class Actor(nn.Module):
         x = F.relu(x)
         x = self.linear(x)
 
-        a1_probs = torch.nn.functional.log_softmax(x[:, :50], dim=1)
-        a2_probs = torch.nn.functional.log_softmax(x[:, 50:53], dim=1)
-        a3_probs = torch.nn.functional.log_softmax(x[:, 53:56], dim=1)
-        a4_probs = torch.nn.functional.log_softmax(x[:, 56:59], dim=1)
+        # Want to get output shape (N_MAX+1, 4, 4, 3) from a length N_MAX + 12 long vector
+        a1_logits = x[:, : N_MAX + 1]
+        a2_logits = x[:, N_MAX + 1 : N_MAX + 1 + 4]
+        a3_logits = x[:, N_MAX + 1 + 4 : N_MAX + 1 + 4 + 4]
+        a4_logits = x[:, N_MAX + 1 + 4 + 4 : N_MAX + 1 + 4 + 4 + 3]
 
-        return (a1_probs, a2_probs, a3_probs, a4_probs)
+        return (a1_logits, a2_logits, a3_logits, a4_logits)
 
     def init_weights(self):
         torch.nn.init.normal_(self.linear.weight, 0.01, 0.1)
@@ -228,6 +231,35 @@ class GNNAgent(AgentSessionABC):
         state.x = torch.tensor(obs[: self._env.num_nodes, 1:], dtype=torch.float32).to(self.device)
         return state
 
+    def decode_logits(self, components_logits: tuple[torch.tensor]) -> tuple[tuple[int], torch.Tensor]:
+        action, logprob = [], torch.tensor([0], device=self.device, dtype=torch.float32)
+
+        for idx, logits in enumerate(components_logits):
+            logits = logits.squeeze()
+
+            # Find invalid actions and mask out
+            valid_component_indicies = set([act[idx] for act in self._env.action_dict.values() if act[:idx] == action])
+            invalid_component_indicies = set(range(logits.shape[0])).difference(valid_component_indicies)
+
+            if len(invalid_component_indicies) > 0:
+                invalid_component_indicies = torch.tensor(list(invalid_component_indicies))
+                logits[invalid_component_indicies] = -torch.inf
+
+            # Generate distribution
+            dist = Categorical(logits=logits)
+            sampled_index = dist.sample()
+            sampled_component = torch.tensor([act[idx] for act in self._env.action_dict.values()]).unique()[sampled_index]
+
+            # Add component to action and add logprob to total
+            action.append(sampled_component.item())
+            logprob = torch.nn.functional.log_softmax(logits, dim=0)[sampled_index]
+
+            # If a 0 is sampled at index 0, return the default action
+            if idx == 0 and sampled_component == 0:
+                return (0,0,0,0), logprob
+            
+        return tuple(action), logprob
+
     def evaluate(self, time_steps: int = 128, episodes: int = 128, **kwargs):
         self.is_eval = True
 
@@ -242,19 +274,10 @@ class GNNAgent(AgentSessionABC):
             while step < time_steps and not done:
                 # Format Data and pass through actor
                 with torch.no_grad():
-                    action_component_logprobs = self.actor(self.create_graph(obs))
+                    action_components_logits = self.actor(self.create_graph(obs))
 
                 # Sample action and calculate probabilites
-                sampled_action = []
-                for idx, logprobs in enumerate(action_component_logprobs):
-                    probs = torch.exp(logprobs)
-
-                    # Mask nodes out which dont exist
-                    if idx == 0:
-                        probs[self._env.num_nodes + 1 :] = 0
-
-                    sampled_action_component = torch.multinomial(probs[0], num_samples=1)
-                    sampled_action.append(sampled_action_component.item())
+                sampled_action, _ = self.decode_logits(action_components_logits)
 
                 # Check if action valid:
                 if sampled_action in self._env.action_dict.values():
@@ -291,33 +314,10 @@ class GNNAgent(AgentSessionABC):
 
             while step < time_steps and not done:
                 # Format Data and pass through actor
-                action_component_logprobs = self.actor(self.create_graph(obs))
+                action_component_logits = self.actor(self.create_graph(obs))
 
                 # Sample action and calculate probabilites
-                sampled_action = []
-                action_logprob = 0
-                for idx, logprobs in enumerate(action_component_logprobs):
-                    probs = torch.exp(logprobs)
-
-                    # Mask nodes out which dont exist
-                    if idx == 0:
-                        probs[self._env.num_nodes + 1 :] = 0
-
-                    # Sample an action component
-                    sampled_action_component = torch.multinomial(probs[0], num_samples=1)
-
-                    # If its the 2nd or 3rd component, add one as they start at 1
-                    if idx in [1,2]:
-                        sampled_action_component += 1
-
-                    # Add to action list and add logprob
-                    sampled_action.append(sampled_action_component.item())
-                    action_logprob += logprobs[0, sampled_action_component]
-
-                    # If its the first component and a 0 is sampled, return the zero default action and stop sampling
-                    if idx == 0 and sampled_action_component == 0:
-                        sampled_action = [0,0,0,0]
-                        break
+                sampled_action, action_logprob = self.decode_logits(action_component_logits)
                     
                 # Check if action valid:
                 if sampled_action in self._env.action_dict.values():
