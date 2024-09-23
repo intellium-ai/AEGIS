@@ -238,9 +238,19 @@ class GNNAgent(AgentSessionABC):
             logits = logits.squeeze()
 
             # Find invalid actions and mask out
-            valid_component_indicies = set([act[idx] for act in self._env.action_dict.values() if act[:idx] == action])
+            # Get all of the values for the component that would be allowed based on the previous components
+            valid_component_values = set([act[idx] for act in self._env.action_dict.values() if act[:idx] == action])
+
+            # Get a sorted list of all possible values for the component
+            all_unique_component_values = sorted(list(set([act[idx] for act in self._env.action_dict.values()])))
+
+            # Get the index of each valid value for the all_unique list
+            valid_component_indicies = set(all_unique_component_values.index(value) for value in valid_component_values)
+
+            # Remove the valid indicies from the set of all indicies for the component to get the invalid indicies
             invalid_component_indicies = set(range(logits.shape[0])).difference(valid_component_indicies)
 
+            # If there are invalid indicies, mask them out
             if len(invalid_component_indicies) > 0:
                 invalid_component_indicies = torch.tensor(list(invalid_component_indicies))
                 logits[invalid_component_indicies] = -torch.inf
@@ -248,10 +258,12 @@ class GNNAgent(AgentSessionABC):
             # Generate distribution
             dist = Categorical(logits=logits)
             sampled_index = dist.sample()
-            sampled_component = torch.tensor([act[idx] for act in self._env.action_dict.values()]).unique()[sampled_index]
+
+            # Convert the sampled index back into the actual component value
+            sampled_component = all_unique_component_values[sampled_index]
 
             # Add component to action and add logprob to total
-            action.append(sampled_component.item())
+            action.append(sampled_component)
             logprob = torch.nn.functional.log_softmax(logits, dim=0)[sampled_index]
 
             # If a 0 is sampled at index 0, return the default action
