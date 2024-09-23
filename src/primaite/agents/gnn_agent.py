@@ -169,19 +169,19 @@ class GNNAgent(AgentSessionABC):
         gamma: float = 0.99,
         actor_lr: float = 0.001,
         critic_lr: float = 0.01,
+        total_episodes: int = 128,
         device: str = "cuda:0",
     ):
         super().__init__(training_config_path, lay_down_config_path)
         assert self._training_config.agent_framework == AgentFramework.CUSTOM
         assert self._training_config.agent_identifier == AgentIdentifier.GNN
-
         self.gamma = gamma
         self.actor_lr = actor_lr
         self.critic_lr = critic_lr
 
         self.hidden_dim = hidden_dim
         self.gat_layers = gat_layers
-
+        self.total_episodes = total_episodes
         self.device = device
 
         self._setup()
@@ -206,9 +206,29 @@ class GNNAgent(AgentSessionABC):
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
+        self.actor_lr_scheduler = CosineAnnealingLR(self.actor_optimizer, T_max=self.total_episodes)
+        self.criticr_lr_scheduler = CosineAnnealingLR(self.critic_optimizer, T_max=self.total_episodes)
+
         self.writer = SummaryWriter(
             flush_secs=15,
             log_dir=f'./gnn_agent_runs/{datetime.datetime.now().strftime("%d-%H:%M:%S")}__hd{self.hidden_dim}_l{self.gat_layers}_g{self.gamma}_a{self.actor_lr}_c{self.critic_lr}',
+        )
+
+        # Keep track of env history
+        super()._setup()
+
+        self._can_learn = True
+        self._can_evaluate = True
+
+        self.action_list_to_int = {tuple(value): key for key, value in self._env.action_dict.items()}
+
+    def reset_env(self, laydown_config_path: str):
+        super().__init__(self._training_config_path, laydown_config_path)
+        self._env = Primaite(
+            training_config_path=self._training_config_path,
+            lay_down_config_path=laydown_config_path,
+            session_path=self.session_path,
+            timestamp_str=self.timestamp_str,
         )
 
         # Keep track of env history
@@ -275,8 +295,6 @@ class GNNAgent(AgentSessionABC):
         return reward_per_ep
 
     def learn(self, time_steps: int = 128, episodes: int = 128, **kwargs):
-        actor_lr_scheduler = CosineAnnealingLR(self.actor_optimizer, T_max=episodes)
-        criticr_lr_scheduler = CosineAnnealingLR(self.critic_optimizer, T_max=episodes)
 
         self.is_eval = False
 
@@ -284,6 +302,7 @@ class GNNAgent(AgentSessionABC):
         reward_per_ep = []
 
         for ep in range(episodes):
+            print(self.actor_lr_scheduler.get_last_lr())
             obs = self._env.reset()
             done, step = False, 0
 
@@ -359,8 +378,8 @@ class GNNAgent(AgentSessionABC):
             reward_per_ep.append(np.sum(episode_rewards))
             self.writer.add_scalar("episode/reward_avg", np.mean(episode_rewards), global_step=ep + 1)
 
-            actor_lr_scheduler.step()
-            criticr_lr_scheduler.step()
+            self.actor_lr_scheduler.step()
+            self.criticr_lr_scheduler.step()
 
         np.save(os.path.join(self.writer.log_dir, "reward_per_ep.npy"), reward_per_ep)
         # self._env.close()
