@@ -385,30 +385,27 @@ class LLM(torch.nn.Module):
 
     def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
+        logits = logits.squeeze(1)
+
         allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
 
-        warnings.warn('_filter_logits has not been tested since a substantial update to the LLM class!\nIt may not work as intended!')
-
-
         token_ids = torch.empty(logits.shape[0], dtype=torch.int32, device=logits.device)
-        logits = torch.empty(logits.shape[0], dtype=torch.float32, device=logits.device)
+        filtered_logits = logits.clone()
 
         # For each sequence, apply the filtering to the output logits and select the highest logit
         for i in range(logits.shape[0]):
-            filtered_logits = logits[i, allowed_indices[i]]
+            allowed_mask = torch.zeros_like(logits[0], dtype=torch.bool)
+            allowed_mask[allowed_indices[i]] = True
+
+            filtered_logits[i][torch.logical_not(allowed_mask)] = -torch.inf
 
             if do_sample:
-                dist = Categorical(logits=logits)
-                sampled_indicies = dist.sample()
-
-                token_ids[i] = allowed_indices[i][sampled_indicies]
-                logits[i] = filtered_logits[sampled_indicies]
+                dist = Categorical(logits=filtered_logits[i])
+                token_ids[i] = dist.sample()
             else:
-                max_logits, max_indices = torch.max(filtered_logits, dim=-1)
-                token_ids[i] = allowed_indices[i][max_indices]
-                logits[i] = max_logits
+                token_ids[i] = torch.argmax(filtered_logits[i]).to(torch.int32)
 
-        return token_ids.unsqueeze(1), logits.unsqueeze(1)
+        return token_ids.unsqueeze(1), filtered_logits.unsqueeze(1)
 
     def _generate_allowed_indicies(self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]) -> List[torch.Tensor]:
         allowed_indices = []
