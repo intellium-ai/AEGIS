@@ -60,7 +60,7 @@ class GITAgent(AgentSessionABC):
             self._agent = GITPolicy(
                 state_space=6,
                 hidden_dim=128,
-                n_graph_tokens=20,
+                n_graph_tokens=100,
                 ge_device="cuda:0",
             )
 
@@ -74,9 +74,22 @@ class GITAgent(AgentSessionABC):
         self._can_evaluate = True
 
         self.optimiser = torch.optim.Adam(self._agent.parameters(), maximize=True, lr=0.01)
-        if save_path is not None:
-            self.optimiser.load_state_dict(torch.load(os.path.join(save_path, 'git_agent_optim_state.pt')))
         self.writer = SummaryWriter(flush_secs=15)
+
+    def reset_env(self, laydown_config_path: str):
+        super().__init__(self._training_config_path, laydown_config_path)
+        self._env = Primaite(
+            training_config_path=self._training_config_path,
+            lay_down_config_path=laydown_config_path,
+            session_path=self.session_path,
+            timestamp_str=self.timestamp_str,
+        )
+
+        # Keep track of env history
+        super()._setup()
+
+        self._can_learn = True
+        self._can_evaluate = True
 
     def _save_checkpoint(self) -> None:
         pass
@@ -93,7 +106,9 @@ class GITAgent(AgentSessionABC):
 
         graph_batch = self.create_graph(obs)
         action_prompt, reasoning_prompt = self._build_prompt()
-        llm_action_text, probs, reasoning_statement, pre_action_input = self._agent(graph_batch, action_prompt, reasoning_prompt)
+        llm_action_text, probs, reasoning_statement, pre_action_input = self._agent(
+            graph_batch, action_prompt, reasoning_prompt
+        )
 
         # Validate that the action ID is a valid action integer. If not, fallback to 0.
         try:
@@ -102,7 +117,7 @@ class GITAgent(AgentSessionABC):
             action = action.to_node_action(network=network).action_id
         except:
             action = 0
-            print('Invalid LLM Action')
+            print("Invalid LLM Action")
         return action, torch.sum(torch.log(probs)), pre_action_input
 
     def calculate_action_info(self, obs: np.ndarray) -> tuple[int, ActionInfo]: ...
@@ -111,19 +126,19 @@ class GITAgent(AgentSessionABC):
 
         # Make the service name just TCP or UDP etc, then find the mapping between nodes and what service they have.
         nodes_table = self.obs_history[0].nodes_table.rename(
-            columns={"TCP Service State": "TCP", "TCP_SQL Service State": "TCP_SQL", "UDP Service State": "UDP"}
+            columns={"HTTP Service State": "HTTP", "FTP Service State": "FTP", "SSH Service State": "SSH"}
         )
         node_services = {}
         for idx in range(len(nodes_table)):
             node = nodes_table.iloc[idx, :]
             node_services[node["Name"]] = []
 
-            if node["TCP"] != "-":
-                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "TCP"][0])
-            if node["TCP_SQL"] != "-":
-                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "TCP_SQL"][0])
-            if node["UDP"] != "-":
-                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "UDP"][0])
+            if node["HTTP"] != "-":
+                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "HTTP"][0])
+            if node["FTP"] != "-":
+                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "FTP"][0])
+            if node["SSH"] != "-":
+                node_services[node["Name"]].append([k for k, v in self.service_mapping.items() if v == "SSH"][0])
 
         # Get stringified node map, service map, node services, observation and action history and current observation difference for prompt
         node_str = "\n".join(f"{key}: {value}" for key, value in self.node_mapping.items())  # ID: NODE_NAME
@@ -206,7 +221,6 @@ class GITAgent(AgentSessionABC):
                 node_property = "NONE"
                 service_name = "NONE"
 
-
         return AgentNodeAction(
             node_name=str(node), node_property=node_property, property_action=property_action, service_name=service_name
         )
@@ -236,25 +250,25 @@ class GITAgent(AgentSessionABC):
                     action, _, _ = self._calculate_action(state)
                 state, reward, terminated, _ = self._env.step(action=action)
                 steps += 1
-                
+
                 episode_rewards.append(reward)
 
         self._env.close()
         super().evaluate()
 
     def learn(self, **kwargs):
-        discount_factor = kwargs.pop('discount_factor', 0.9)
+        discount_factor = kwargs.pop("discount_factor", 0.9)
 
-        max_steps = 50 #self._training_config.num_train_steps
-        num_episodes = 20 #self._training_config.num_train_episodes
+        max_steps = self._training_config.num_train_steps
+        num_episodes = self._training_config.num_train_episodes
         self.is_eval = False
 
         global_step = 0
 
-        pbar = tqdm(total=max_steps, unit='step')
+        pbar = tqdm(total=max_steps, unit="step")
         for episode in range(num_episodes):
             pbar.reset()
-            pbar.set_description(desc=f'Episode {episode} Running')
+            pbar.set_description(desc=f"Episode {episode} Running")
 
             episode_rewards = []
             episode_pre_action_inps = []
@@ -265,7 +279,7 @@ class GITAgent(AgentSessionABC):
             state = self._env.reset()
 
             terminated, step = False, 0
-            while step  < max_steps and not terminated:
+            while step < max_steps and not terminated:
 
                 with torch.no_grad():
                     action, _, pre_action_input = self._calculate_action(state)
@@ -276,18 +290,18 @@ class GITAgent(AgentSessionABC):
                 episode_action_tokens.append(pre_action_input[1])
                 epsiode_actions.append(action)
 
-                #torch.cuda.empty_cache()
-                
+                # torch.cuda.empty_cache()
+
                 pbar.update(1)
-                pbar.set_postfix({'Reward': reward})
-                self.writer.add_scalar('step/reward', reward, global_step=global_step+step)
+                pbar.set_postfix({"Reward": reward})
+                self.writer.add_scalar("step/reward", reward, global_step=global_step + step)
                 step_times.append(time.time())
 
                 step += 1
 
-            pbar.set_description(desc=f'Episode {episode} Done - Reward Sum: {np.sum(episode_rewards)}')
-            self.writer.add_scalar('episode/reward', np.sum(episode_rewards), global_step=episode)
-            self.writer.add_histogram('episode/actions', np.array(epsiode_actions), global_step=episode)
+            pbar.set_description(desc=f"Episode {episode} Done - Reward Sum: {np.sum(episode_rewards)}")
+            self.writer.add_scalar("episode/reward", np.sum(episode_rewards), global_step=episode)
+            self.writer.add_histogram("episode/actions", np.array(epsiode_actions), global_step=episode)
 
             # End of episode
             expected_return = 0
@@ -295,35 +309,34 @@ class GITAgent(AgentSessionABC):
 
             step_update_values = []
 
-            for t in range(step-1, -1, -1):
+            for t in range(step - 1, -1, -1):
                 expected_return += episode_rewards[t]
 
                 step_update_val = 0
 
                 for action_token_prob in self._agent.llm.yield_probs_given_tokens(
-                    inputs_embeds  = episode_pre_action_inps[t].to(torch.device('cuda:0')), 
-                    attention_mask = torch.ones((1, episode_pre_action_inps[t].shape[1]), device='cpu'),
-                    token_ids      = episode_action_tokens[t]
+                    inputs_embeds=episode_pre_action_inps[t].to(torch.device("cuda:0")),
+                    attention_mask=torch.ones((1, episode_pre_action_inps[t].shape[1]), device="cpu"),
+                    token_ids=episode_action_tokens[t],
                 ):
-                    update_value = (discount_factor ** t) * expected_return * action_token_prob
+                    update_value = (discount_factor**t) * expected_return * action_token_prob
                     update_value.backward()
 
                     step_update_val += update_value.detach().cpu().item()
 
                 step_update_values.append(step_update_val)
                 expected_return *= discount_factor
-            
-            for i, val in enumerate(step_update_values):
-                self.writer.add_scalar('step/update_val', val, walltime=step_times[t], global_step=global_step+i)
 
-                
+            for i, val in enumerate(step_update_values):
+                self.writer.add_scalar("step/update_val", val, walltime=step_times[t], global_step=global_step + i)
+
             self.optimiser.step()
 
             global_step += step
 
             logging.info(f"Completed episode: {episode}")
-            self.writer.add_scalar('episode/update_val', np.sum(step_update_values), global_step=episode)
-            self.writer.add_scalar('episode/num_steps', step, global_step=episode)
+            self.writer.add_scalar("episode/update_val", np.sum(step_update_values), global_step=episode)
+            self.writer.add_scalar("episode/num_steps", step, global_step=episode)
             self.writer.flush()
 
         pbar.close()
@@ -339,7 +352,7 @@ class GITAgent(AgentSessionABC):
 
     def save(self, path: str) -> None:
         self._agent.save(path)
-        torch.save(self.optimiser.state_dict(), os.path.join(path, 'git_agent_optim_state.pt'))
+        torch.save(self.optimiser.state_dict(), os.path.join(path, "git_agent_optim_state.pt"))
 
     def export(self) -> None:
         return None
