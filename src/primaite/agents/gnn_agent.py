@@ -170,7 +170,7 @@ class GNNAgent(AgentSessionABC):
         hidden_dim: int = 128,
         gat_layers: int = 3,
         gamma: float = 0.99,
-        actor_lr: float = 0.001,
+        actor_lr: float = 0.01,
         critic_lr: float = 0.01,
         device: str = "cuda:0",
     ):
@@ -200,14 +200,20 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self.actor = Actor(hidden_dim=self.hidden_dim, n_gat_layers=self.gat_layers, device=self.device).to(self.device)
-
-        self.critic = Critic(hidden_dim=self.hidden_dim, n_gat_layers=self.gat_layers, device=self.device).to(
-            self.device
+        self.actor = Actor(
+            hidden_dim=self.hidden_dim, 
+            n_gat_layers=self.gat_layers, 
+            device=self.device
         )
 
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
+        self.critic = Critic(
+            hidden_dim=self.hidden_dim, 
+            n_gat_layers=self.gat_layers, 
+            device=self.device
+        )
+
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr, weight_decay=0.01)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr, weight_decay=0.01)
 
         self.writer = SummaryWriter(
             flush_secs=15,
