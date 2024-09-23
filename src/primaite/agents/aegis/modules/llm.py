@@ -353,26 +353,21 @@ class LLM(torch.nn.Module):
         token_ids: torch.Tensor
     ) -> Generator[torch.Tensor, None, None]:
         
-        warnings.warn('yield_probs_given_tokens has not been tested since a substantial update to the LLM class!\nIt may not work as intended!')
-
         for i, token_idx in enumerate(token_ids):
             output = self.model.forward(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
 
-            # Figure out which logits in the sequence to sample from (the right-most significant token determined with the attention mask)
-            last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
-            last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
-
-            # Get next logits for each input sequence
-            logits = output.logits[torch.arange(inputs_embeds.size(0)), last_non_pad_indices]
+            logits = output.logits[:, -1, :]
 
             prev_token_ids = None if i == 0 else token_ids[:i]
             allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
 
-            filtered_logits = logits[:, allowed_indices[0]]
-            filtered_probs = torch.nn.functional.softmax(filtered_logits, dim=1)
+            logits = logits.squeeze(0)
 
-            local_idx = torch.where(allowed_indices[0] == token_idx.to(allowed_indices[0].device))[0]
-            probs = filtered_probs.squeeze()[local_idx]
+            allowed_mask = torch.zeros_like(logits, dtype=torch.bool)
+            allowed_mask[allowed_indices[0]] = True
+            filtered_logits = logits.clone()[torch.logical_not(allowed_mask)] = -torch.inf
+
+            probs = torch.exp(filtered_logits)
 
             # Get embeddings of the new tokens
             new_embeddings = self.get_input_embeddings(token_ids=token_idx.reshape((1,1)), grad=True)["inputs_embeds"]
@@ -385,30 +380,27 @@ class LLM(torch.nn.Module):
 
     def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
         """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
+        logits = logits.squeeze(1)
+
         allowed_indices = self._generate_allowed_indicies(logits, prev_token_ids)
 
-        warnings.warn('_filter_logits has not been tested since a substantial update to the LLM class!\nIt may not work as intended!')
-
-
         token_ids = torch.empty(logits.shape[0], dtype=torch.int32, device=logits.device)
-        logits = torch.empty(logits.shape[0], dtype=torch.float32, device=logits.device)
+        filtered_logits = logits.clone()
 
         # For each sequence, apply the filtering to the output logits and select the highest logit
         for i in range(logits.shape[0]):
-            filtered_logits = logits[i, allowed_indices[i]]
+            allowed_mask = torch.zeros_like(logits[0], dtype=torch.bool)
+            allowed_mask[allowed_indices[i]] = True
+
+            filtered_logits[i][torch.logical_not(allowed_mask)] = -torch.inf
 
             if do_sample:
-                dist = Categorical(logits=logits)
-                sampled_indicies = dist.sample()
-
-                token_ids[i] = allowed_indices[i][sampled_indicies]
-                logits[i] = filtered_logits[sampled_indicies]
+                dist = Categorical(logits=filtered_logits[i])
+                token_ids[i] = dist.sample()
             else:
-                max_logits, max_indices = torch.max(filtered_logits, dim=-1)
-                token_ids[i] = allowed_indices[i][max_indices]
-                logits[i] = max_logits
+                token_ids[i] = torch.argmax(filtered_logits[i]).to(torch.int32)
 
-        return token_ids.unsqueeze(1), logits.unsqueeze(1)
+        return token_ids.unsqueeze(1), filtered_logits.unsqueeze(1)
 
     def _generate_allowed_indicies(self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]) -> List[torch.Tensor]:
         allowed_indices = []
