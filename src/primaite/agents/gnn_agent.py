@@ -36,7 +36,7 @@ class Actor(nn.Module):
         self.inner_gat = GATConv(in_channels=hidden_dim, out_channels=hidden_dim)
         self.layer_norm = LayerNorm(hidden_dim)
         self.jumping_knowledge = JumpingKnowledge(mode="max")
-        self.linear = nn.Linear(in_features=hidden_dim, out_features=50 + 4 + 4 + 3)
+        self.linear = nn.Linear(in_features=hidden_dim, out_features=50+3+3+3)
         self.device = device
         self.n_gat_layers = n_gat_layers
 
@@ -64,9 +64,9 @@ class Actor(nn.Module):
         x = self.linear(x)
 
         a1_probs = torch.nn.functional.log_softmax(x[:, :50], dim=1)
-        a2_probs = torch.nn.functional.log_softmax(x[:, 50:54], dim=1)
-        a3_probs = torch.nn.functional.log_softmax(x[:, 54:58], dim=1)
-        a4_probs = torch.nn.functional.log_softmax(x[:, 58:61], dim=1)
+        a2_probs = torch.nn.functional.log_softmax(x[:, 50:53], dim=1)
+        a3_probs = torch.nn.functional.log_softmax(x[:, 53:56], dim=1)
+        a4_probs = torch.nn.functional.log_softmax(x[:, 56:59], dim=1)
 
         return (a1_probs, a2_probs, a3_probs, a4_probs)
 
@@ -303,11 +303,22 @@ class GNNAgent(AgentSessionABC):
                     if idx == 0:
                         probs[self._env.num_nodes + 1 :] = 0
 
+                    # Sample an action component
                     sampled_action_component = torch.multinomial(probs[0], num_samples=1)
-                    sampled_action.append(sampled_action_component.item())
 
+                    # If its the 2nd or 3rd component, add one as they start at 1
+                    if idx in [1,2]:
+                        sampled_action_component += 1
+
+                    # Add to action list and add logprob
+                    sampled_action.append(sampled_action_component.item())
                     action_logprob += logprobs[0, sampled_action_component]
 
+                    # If its the first component and a 0 is sampled, return the zero default action and stop sampling
+                    if idx == 0 and sampled_action_component == 0:
+                        sampled_action = [0,0,0,0]
+                        break
+                    
                 # Check if action valid:
                 if sampled_action in self._env.action_dict.values():
                     action = self.action_list_to_int[tuple(sampled_action)]
