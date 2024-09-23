@@ -69,6 +69,8 @@ For your information, the following actions are available for selection later. A
 
 Your output should be in the following format:
 {{'reasoning': 'Reason for node selection', 'node_name': 'NODE_NAME'}}
+
+Always use the json schema provided!
 Reasoning and node selection: 
 """
 

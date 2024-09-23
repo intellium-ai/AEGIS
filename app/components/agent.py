@@ -4,7 +4,7 @@ from primaite.agents.git_agent import GITAgent
 from primaite.agents.gnn_agent import GNNAgent
 from primaite.agents.rllib import RLlibAgent
 from primaite.agents.sb3 import SB3Agent
-from primaite.agents.llm import LLMAgent, TrainableLLMAgent
+from primaite.agents.vanilla_llm import LLMAgent, TrainableLLMAgent
 from primaite.agents.simple import RandomAgent, DoNothingNodeAgent, PickACardAnyCardAgent
 
 agent_map = {
