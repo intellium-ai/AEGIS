@@ -357,9 +357,9 @@ class LLM(torch.nn.Module):
 
             allowed_mask = torch.zeros_like(logits, dtype=torch.bool)
             allowed_mask[allowed_indices[0]] = True
-            filtered_logits: torch.Tensor = logits.clone()
-            probs = filtered_logits
-            probs[torch.logical_not(allowed_mask)] = -torch.inf
+            filtered_logits = logits.clone()
+            logprobs = filtered_logits
+            logprobs[torch.logical_not(allowed_mask)] = -torch.inf
 
             # Get embeddings of the new tokens
             new_embeddings = self.get_input_embeddings(token_ids=token_idx.reshape((1, 1)), grad=True)["inputs_embeds"]
@@ -367,7 +367,7 @@ class LLM(torch.nn.Module):
             # Add the new token to the inputs_embeds and expand the attention mask accordingly
             inputs_embeds = torch.cat([inputs_embeds, new_embeddings], dim=1)
             attention_mask = torch.cat([attention_mask, torch.ones((1, 1), device=attention_mask.device)], dim=1)
-            yield torch.max(probs, dim=0).values
+            yield torch.log_softmax(logprobs, dim=0)[token_idx]
 
     def _filter_logits(
         self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False
