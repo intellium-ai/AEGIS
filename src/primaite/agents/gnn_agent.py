@@ -274,7 +274,7 @@ class GNNAgent(AgentSessionABC):
 
         return reward_per_ep
 
-    def learn(self, time_steps: int = 128, episodes: int = 20, **kwargs):
+    def learn(self, time_steps: int = 128, episodes: int = 128, **kwargs):
         actor_lr_scheduler = CosineAnnealingLR(self.actor_optimizer, T_max=episodes)
         criticr_lr_scheduler = CosineAnnealingLR(self.critic_optimizer, T_max=episodes)
 
