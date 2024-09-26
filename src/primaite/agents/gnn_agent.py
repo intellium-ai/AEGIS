@@ -28,6 +28,7 @@ logging.getLogger().setLevel(logging.INFO)
 # Maximum number of nodes in any input graph
 N_MAX = 50
 
+
 class Actor(nn.Module):
     def __init__(self, hidden_dim, n_gat_layers: int = 3, device: str = "cuda:0"):
         self.hidden_dim = hidden_dim
@@ -43,13 +44,13 @@ class Actor(nn.Module):
         self.n_gat_layers = n_gat_layers
 
         self.init_weights()
+        self.to(self.device)
 
     def forward(self, graph):
         batch = Batch.from_data_list([graph]).to(self.device)
 
         x = batch.x.to(self.device)
         edge_index = batch.edge_index.to(self.device)
-
         x = self.gat(x, edge_index)
         if self.n_gat_layers > 1:
             xs = []
@@ -114,6 +115,7 @@ class Critic(nn.Module):
         self.n_gat_layers = n_gat_layers
 
         self.init_weights()
+        self.to(self.device)
 
     def forward(self, graph):
         batch = Batch.from_data_list([graph]).to(self.device)
@@ -200,17 +202,9 @@ class GNNAgent(AgentSessionABC):
             timestamp_str=self.timestamp_str,
         )
 
-        self.actor = Actor(
-            hidden_dim=self.hidden_dim, 
-            n_gat_layers=self.gat_layers, 
-            device=self.device
-        )
+        self.actor = Actor(hidden_dim=self.hidden_dim, n_gat_layers=self.gat_layers, device=self.device)
 
-        self.critic = Critic(
-            hidden_dim=self.hidden_dim, 
-            n_gat_layers=self.gat_layers, 
-            device=self.device
-        )
+        self.critic = Critic(hidden_dim=self.hidden_dim, n_gat_layers=self.gat_layers, device=self.device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr, weight_decay=0.01)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr, weight_decay=0.01)
@@ -294,8 +288,8 @@ class GNNAgent(AgentSessionABC):
 
             # If a 0 is sampled at index 0, return the default action
             if idx == 0 and sampled_component == 0:
-                return (0,0,0,0), logprob
-            
+                return (0, 0, 0, 0), logprob
+
         return tuple(action), logprob
 
     def evaluate(self, time_steps: int = 128, episodes: int = 128, **kwargs):
@@ -343,7 +337,6 @@ class GNNAgent(AgentSessionABC):
         reward_per_ep = []
 
         for ep in range(episodes):
-            print(self.actor_lr_scheduler.get_last_lr())
             obs = self._env.reset()
             done, step = False, 0
 
@@ -355,7 +348,7 @@ class GNNAgent(AgentSessionABC):
 
                 # Sample action and calculate probabilites
                 sampled_action, action_logprob = self.decode_logits(action_component_logits)
-                    
+
                 # Check if action valid:
                 if sampled_action in self._env.action_dict.values():
                     action = self.action_list_to_int[tuple(sampled_action)]
