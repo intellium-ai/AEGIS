@@ -30,24 +30,26 @@ class GITPolicy(nn.Module):
         ge_device: str = "cuda:0",
         n_graph_tokens: int = 10,
         lora_config: LoraConfig = default_peft_config,
-        **kwargs
+        **kwargs,
     ):
-        
+
         super(GITPolicy, self).__init__()
         self.ge_device = ge_device
 
         # space size check
-        assert not (state_space is None and 'ge' not in kwargs.keys()), "None state_space input: state_space should be assigned."
-        if hidden_dim is None and 'ge' not in kwargs.keys():
+        assert not (
+            state_space is None and "ge" not in kwargs.keys()
+        ), "None state_space input: state_space should be assigned."
+        if hidden_dim is None and "ge" not in kwargs.keys():
             hidden_dim = state_space * 2
 
-        if 'llm' in kwargs:
-            self.llm = kwargs['llm']
+        if "llm" in kwargs:
+            self.llm = kwargs["llm"]
         else:
             self.llm = LLM(peft_config=lora_config)
 
-        if 'ge' in kwargs:
-            self.ge = kwargs['ge']
+        if "ge" in kwargs:
+            self.ge = kwargs["ge"]
         else:
             self.ge = GraphEmbedding(
                 in_channels=state_space,
@@ -70,10 +72,11 @@ class GITPolicy(nn.Module):
         inputs = self.llm.format_inputs(inputs=inputs, graph_embeddings=graph_embs)
 
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'),
-            attention_mask=inputs["attention_mask"].to('cuda:0'),
+            inputs_embeds=inputs["inputs_embeds"].to("cuda:0"),
+            attention_mask=inputs["attention_mask"].to("cuda:0"),
             grad=False,
             restrict_output=False,
+            max_new_tokens=40,
         )  # Set grad to true when more GPUage
         reasoning_statement = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
@@ -83,12 +86,19 @@ class GITPolicy(nn.Module):
 
         # 4.0 - Generate the next action (5 tokens required per action)
         token_ids, probs = self.llm.generate_from_embeddings(
-            inputs_embeds=inputs["inputs_embeds"].to('cuda:0'), attention_mask=inputs["attention_mask"].to('cuda:0'), max_new_tokens=5
+            inputs_embeds=inputs["inputs_embeds"].to("cuda:0"),
+            attention_mask=inputs["attention_mask"].to("cuda:0"),
+            max_new_tokens=5,
         )
         response = self.llm.tokenizer.decode(token_ids.squeeze(), skip_special_tokens=True)
 
         logging.info(f"LLM Generated Reasoning: '{reasoning_statement}' with action '{response}'")
-        return (response, probs.squeeze(), reasoning_statement, (inputs["inputs_embeds"].detach(), token_ids.squeeze().detach()))
+        return (
+            response,
+            probs.squeeze(),
+            reasoning_statement,
+            (inputs["inputs_embeds"].detach(), token_ids.squeeze().detach()),
+        )
 
     def save(self, path: str) -> None:
         self.llm.save(path)
@@ -96,7 +106,4 @@ class GITPolicy(nn.Module):
 
     @classmethod
     def load(cls, path: str) -> None:
-        return cls(
-            llm=LLM.load(path), 
-            ge=GraphEmbedding.load(path)
-        )
+        return cls(llm=LLM.load(path), ge=GraphEmbedding.load(path))

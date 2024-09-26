@@ -13,42 +13,42 @@ from peft import PeftModelForCausalLM, PeftModel, PeftConfig
 
 
 DEFAULT_DEVICE_MAP: dict = {
-    'model.embed_tokens': 0,
-    'lm_head': 0,
-    'model.layers.0': 0,
-    'model.layers.1': 1,
-    'model.layers.2': 1,
-    'model.layers.3': 1,
-    'model.layers.4': 1,
-    'model.layers.5': 1,
-    'model.layers.6': 1,
-    'model.layers.7': 1,
-    'model.layers.8': 1,
-    'model.layers.9': 2,
-    'model.layers.10': 2,
-    'model.layers.11': 2,
-    'model.layers.12': 2,
-    'model.layers.13': 2,
-    'model.layers.14': 2,
-    'model.layers.15': 2,
-    'model.layers.16': 2,
-    'model.layers.17': 3,
-    'model.layers.18': 3,
-    'model.layers.19': 3,
-    'model.layers.20': 3,
-    'model.layers.21': 3,
-    'model.layers.22': 3,
-    'model.layers.23': 3,
-    'model.norm': 3,
+    "model.embed_tokens": 0,
+    "lm_head": 0,
+    "model.layers.0": 0,
+    "model.layers.1": 1,
+    "model.layers.2": 1,
+    "model.layers.3": 1,
+    "model.layers.4": 1,
+    "model.layers.5": 1,
+    "model.layers.6": 1,
+    "model.layers.7": 1,
+    "model.layers.8": 1,
+    "model.layers.9": 2,
+    "model.layers.10": 2,
+    "model.layers.11": 2,
+    "model.layers.12": 2,
+    "model.layers.13": 2,
+    "model.layers.14": 2,
+    "model.layers.15": 2,
+    "model.layers.16": 2,
+    "model.layers.17": 3,
+    "model.layers.18": 3,
+    "model.layers.19": 3,
+    "model.layers.20": 3,
+    "model.layers.21": 3,
+    "model.layers.22": 3,
+    "model.layers.23": 3,
+    "model.norm": 3,
 }
 
 
 class LLM(torch.nn.Module):
     def __init__(
         self,
-        model_name_or_path = "HuggingFaceTB/SmolLM-1.7B-Instruct",
+        model_name_or_path="HuggingFaceTB/SmolLM-1.7B-Instruct",
         peft_config: LoraConfig = None,
-        device_map: dict = DEFAULT_DEVICE_MAP
+        device_map: dict = DEFAULT_DEVICE_MAP,
     ):
         super().__init__()
 
@@ -65,19 +65,14 @@ class LLM(torch.nn.Module):
             torch_dtype=torch.float16,
             device_map=device_map,
             quantization_config=self.bnb_config,
-            attn_implementation="sdpa"
+            attn_implementation="sdpa",
         )
 
         if peft_config:
-            self.model : PeftModelForCausalLM = PeftModelForCausalLM(
-                model=model,
-                peft_config=peft_config
-            )
+            self.model: PeftModelForCausalLM = PeftModelForCausalLM(model=model, peft_config=peft_config)
         else:
             self.model: PeftModelForCausalLM = PeftModelForCausalLM.from_pretrained(
-                model=model,
-                model_id=model_name_or_path,
-                is_trainable=True
+                model=model, model_id=model_name_or_path, is_trainable=True
             )
 
         self.device_map = device_map
@@ -104,9 +99,7 @@ class LLM(torch.nn.Module):
         self.llm_embedding_size = self.get_input_embeddings(prompts=["hack"])["inputs_embeds"].shape[2]
 
         self.padding_logit = torch.zeros([len(self.tokenizer)], device=self.device, dtype=torch.float32)
-        self.padding_logit[self.tokenizer.pad_token_id] = (
-            100.0
-        )
+        self.padding_logit[self.tokenizer.pad_token_id] = 100.0
         self.pad_token = torch.tensor([self.tokenizer.pad_token_id], device=self.device, dtype=torch.int32)
 
     def get_n_trainable_llm_parameters(self) -> str:
@@ -205,7 +198,7 @@ class LLM(torch.nn.Module):
         inputs["inputs_embeds"] = embeds
         inputs["attention_mask"] = attention_mask
         return inputs
-    
+
     @cached_property
     def _embeddings_layer(self):
         return self.model.get_input_embeddings()
@@ -225,19 +218,19 @@ class LLM(torch.nn.Module):
         if prompts:
             inputs = self.tokenizer.batch_encode_plus(prompts, return_tensors="pt", padding=True)
         else:
-            inputs = {"input_ids": token_ids, "attention_mask": torch.ones(len(token_ids), dtype=torch.bool, device=self.device)}
+            inputs = {
+                "input_ids": token_ids,
+                "attention_mask": torch.ones(len(token_ids), dtype=torch.bool, device=self.device),
+            }
 
-        inputs['input_ids'] = inputs['input_ids'].to(self.device)
-        inputs['attention_mask'] = inputs['attention_mask'].to(self.device)
-
+        inputs["input_ids"] = inputs["input_ids"].to(self.device)
+        inputs["attention_mask"] = inputs["attention_mask"].to(self.device)
 
         if not grad:
             with torch.no_grad():
                 inputs["inputs_embeds"] = self._embeddings_layer(inputs["input_ids"])
         else:
-            inputs["inputs_embeds"] = self._embeddings_layer(
-                inputs["input_ids"]
-            ).requires_grad_(True)
+            inputs["inputs_embeds"] = self._embeddings_layer(inputs["input_ids"]).requires_grad_(True)
 
         # Remove input ids as as key since no longer needed and a liability to keep updated
         del inputs["input_ids"]
@@ -264,7 +257,7 @@ class LLM(torch.nn.Module):
         max_new_tokens: int = 400,
         restrict_output: bool = True,
         last_hidden_state: bool = False,
-        do_sample: bool = False
+        do_sample: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         device = inputs_embeds.device
 
@@ -286,11 +279,11 @@ class LLM(torch.nn.Module):
                 output = self.model(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
 
             # Figure out which logits in the sequence to sample from (the right-most significant token determined with the attention mask)
-            #last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
-            #last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
+            # last_one_positions = torch.flip(attention_mask, dims=[1]).cumsum(dim=1).eq(1).max(dim=1)[1]
+            # last_non_pad_indices = attention_mask.size(1) - 1 - last_one_positions
 
             # Get next logits for each input sequence
-            #logits = output.logits[torch.arange(inputs_embeds.size(0), device=device), last_non_pad_indices].unsqueeze(1)
+            # logits = output.logits[torch.arange(inputs_embeds.size(0), device=device), last_non_pad_indices].unsqueeze(1)
             logits = output.logits[:, -1, :].unsqueeze(1)
 
             # Apply restriction on the output logits (or don't)
@@ -313,14 +306,16 @@ class LLM(torch.nn.Module):
             if torch.any(sequences_terminated):
                 # For sequences that are done, set their next token and prob to pad token and last token prob
                 token_ids[sequences_terminated] = self.pad_token
-                logits[sequences_terminated] = self.padding_logit #next_token_logits[eos_mask, -1, :].unsqueeze(1)
+                logits[sequences_terminated] = self.padding_logit  # next_token_logits[eos_mask, -1, :].unsqueeze(1)
 
             # Add the new tokens to the sequences
             next_token_ids = torch.cat([next_token_ids, token_ids], dim=1)
             next_token_logits = torch.cat([next_token_logits, logits], dim=1)
 
             # Check for EOS token IDs so we can exclude that sequence from the next token generation.
-            sequences_terminated = torch.logical_or(sequences_terminated, token_ids.squeeze() == self.tokenizer.eos_token_id)
+            sequences_terminated = torch.logical_or(
+                sequences_terminated, token_ids.squeeze() == self.tokenizer.eos_token_id
+            )
 
             # Get embeddings of the new tokens
             new_embeddings = self.get_input_embeddings(token_ids=token_ids, grad=True)["inputs_embeds"]
@@ -345,14 +340,11 @@ class LLM(torch.nn.Module):
             return next_token_ids, next_token_logits, last_hidden_state
 
         return next_token_ids, next_token_logits
-    
+
     def yield_probs_given_tokens(
-        self,
-        inputs_embeds: torch.Tensor,
-        attention_mask: torch.Tensor,
-        token_ids: torch.Tensor
+        self, inputs_embeds: torch.Tensor, attention_mask: torch.Tensor, token_ids: torch.Tensor
     ) -> Generator[torch.Tensor, None, None]:
-        
+
         for i, token_idx in enumerate(token_ids):
             output = self.model.forward(inputs_embeds=inputs_embeds, attention_mask=attention_mask)
 
@@ -365,20 +357,21 @@ class LLM(torch.nn.Module):
 
             allowed_mask = torch.zeros_like(logits, dtype=torch.bool)
             allowed_mask[allowed_indices[0]] = True
-            filtered_logits = logits.clone()[torch.logical_not(allowed_mask)] = -torch.inf
-
-            probs = torch.exp(filtered_logits)
+            filtered_logits = logits.clone()
+            logprobs = filtered_logits
+            logprobs[torch.logical_not(allowed_mask)] = -torch.inf
 
             # Get embeddings of the new tokens
-            new_embeddings = self.get_input_embeddings(token_ids=token_idx.reshape((1,1)), grad=True)["inputs_embeds"]
+            new_embeddings = self.get_input_embeddings(token_ids=token_idx.reshape((1, 1)), grad=True)["inputs_embeds"]
 
             # Add the new token to the inputs_embeds and expand the attention mask accordingly
             inputs_embeds = torch.cat([inputs_embeds, new_embeddings], dim=1)
-            attention_mask = torch.cat([attention_mask, torch.ones((1,1), device=attention_mask.device)], dim=1)
+            attention_mask = torch.cat([attention_mask, torch.ones((1, 1), device=attention_mask.device)], dim=1)
+            yield torch.log_softmax(logprobs, dim=0)[token_idx]
 
-            yield probs
-
-    def _filter_logits(self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _filter_logits(
+        self, logits: torch.Tensor, prev_token_ids: List[int], do_sample: bool = False
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Filter the logits to only allow the allowed tokens and to ensure it follows the required format for primaite action taking."""
         logits = logits.squeeze(1)
 
@@ -402,7 +395,9 @@ class LLM(torch.nn.Module):
 
         return token_ids.unsqueeze(1), filtered_logits.unsqueeze(1)
 
-    def _generate_allowed_indicies(self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]) -> List[torch.Tensor]:
+    def _generate_allowed_indicies(
+        self, logits: torch.Tensor, prev_token_ids: Optional[List[int]]
+    ) -> List[torch.Tensor]:
         allowed_indices = []
         if prev_token_ids is not None:
             for prev_token_id in prev_token_ids:
@@ -417,7 +412,9 @@ class LLM(torch.nn.Module):
                 # Use torch.long cos we use this as an index later
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.int32, device=logits.device
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set],
+                        dtype=torch.int32,
+                        device=logits.device,
                     )
                 )
 
@@ -429,21 +426,21 @@ class LLM(torch.nn.Module):
             for _ in range(logits.shape[0]):
                 allowed_indices.append(
                     torch.tensor(
-                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set], dtype=torch.int32, device=logits.device
+                        [idx for idx in range(logits.shape[-1]) if idx in filtered_vocab_set],
+                        dtype=torch.int32,
+                        device=logits.device,
                     )
                 )
-                
-        return allowed_indices
-    
-    def _generate_last_state(
-        self, 
-        texts: List[str] = None, 
-        input_ids: torch.Tensor = None, 
-        input_embeddings: torch.Tensor = None
-    ) -> torch.Tensor:
-        
-        warnings.warn('_generate_last_state has not been tested since a substantial update to the LLM class!\nIt may not work as intended!')
 
+        return allowed_indices
+
+    def _generate_last_state(
+        self, texts: List[str] = None, input_ids: torch.Tensor = None, input_embeddings: torch.Tensor = None
+    ) -> torch.Tensor:
+
+        warnings.warn(
+            "_generate_last_state has not been tested since a substantial update to the LLM class!\nIt may not work as intended!"
+        )
 
         if texts is not None:
             texts = [self.tokenizer.bos_token + text + self.tokenizer.eos_token for text in texts]
@@ -477,7 +474,7 @@ class LLM(torch.nn.Module):
 
     def save(self, path: str) -> None:
         # Save Tokenizer
-        self.tokenizer.init_kwargs.pop('torch_dtype', None)
+        self.tokenizer.init_kwargs.pop("torch_dtype", None)
         self.tokenizer.save_pretrained(path)
         # Save LLM
         self.model.save_pretrained(path)
@@ -485,7 +482,7 @@ class LLM(torch.nn.Module):
             "device_map": self.device_map,
         }
 
-        json.dump(init_kwargs, open(os.path.join(path, 'llm_init_kwargs.json'), 'w'))
+        json.dump(init_kwargs, open(os.path.join(path, "llm_init_kwargs.json"), "w"))
 
     @classmethod
     def load(cls, path: str):
@@ -494,31 +491,43 @@ class LLM(torch.nn.Module):
         return cls(model_name_or_path=path)
 
         return cls(model_name_or_path=path, **init_kwargs)
-    
+
         # sorry John
 
         # TODO: Is there a nicer way to do this? :)
-        adapter_config = json.load(open(os.path.join(path, 'adapter_config.json')))
+        adapter_config = json.load(open(os.path.join(path, "adapter_config.json")))
         peft_config = PeftConfig.from_peft_type(**adapter_config)
         try:
-            init_kwargs = json.load(open(os.path.join(path, 'llm_init_kwargs.json')))
-            llm = cls(device_map=init_kwargs['device_map'], peft_config=peft_config)
-            device_map = init_kwargs['device_map']
+            init_kwargs = json.load(open(os.path.join(path, "llm_init_kwargs.json")))
+            llm = cls(device_map=init_kwargs["device_map"], peft_config=peft_config)
+            device_map = init_kwargs["device_map"]
         except:
             init_kwargs = {}
             device_map = DEFAULT_DEVICE_MAP
             llm = cls(peft_config=peft_config, device_map=device_map)
-        
-        base_model = AutoModelForCausalLM.from_pretrained(pretrained_model_name_or_path=adapter_config['base_model_name_or_path'], quantization_config=llm.bnb_config, torch_dtype=torch.float16, attn_implementation="sdpa", device_map=device_map)
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=adapter_config["base_model_name_or_path"],
+            quantization_config=llm.bnb_config,
+            torch_dtype=torch.float16,
+            attn_implementation="sdpa",
+            device_map=device_map,
+        )
         print(llm.bnb_config)
         peft_model = PeftModelForCausalLM.from_pretrained(base_model, path, is_trainable=True)
-        tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=path, torch_dtype=torch.float16, padding=True, device_map='auto', padding_side='right')
-        
+        tokenizer = AutoTokenizer.from_pretrained(
+            pretrained_model_name_or_path=path,
+            torch_dtype=torch.float16,
+            padding=True,
+            device_map="auto",
+            padding_side="right",
+        )
+
         llm.model = peft_model
         llm.tokenizer = tokenizer
         llm.model.gradient_checkpointing_enable()
         return llm
-    
+
     @cached_property
     def device(self):
         return f"cuda:{self.device_map['model.embed_tokens']}"
