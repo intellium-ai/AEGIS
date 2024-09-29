@@ -160,10 +160,6 @@ data/datasets
 
 .vscode
 /aegis
-/notebooks/Trainings
-*/runs
 */saved_models
 .profile
-agents/trained_agents/*
-/training_scripts/gnn_agent_runs/*
-/notebooks/gnn_agent_runs/*
+/training_scripts/runs/*

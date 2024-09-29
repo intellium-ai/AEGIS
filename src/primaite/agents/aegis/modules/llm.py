@@ -438,10 +438,6 @@ class LLM(torch.nn.Module):
         self, texts: List[str] = None, input_ids: torch.Tensor = None, input_embeddings: torch.Tensor = None
     ) -> torch.Tensor:
 
-        warnings.warn(
-            "_generate_last_state has not been tested since a substantial update to the LLM class!\nIt may not work as intended!"
-        )
-
         if texts is not None:
             texts = [self.tokenizer.bos_token + text + self.tokenizer.eos_token for text in texts]
             tokenizer_output = self.tokenizer(texts, return_tensors="pt", padding=True)
@@ -450,9 +446,9 @@ class LLM(torch.nn.Module):
             eos_idx = torch.sum(tokenizer_output["attention_mask"], dim=1) - 1
 
         if input_ids is not None:
-            input_embeddings = self.model.pretrained_model.get_input_embeddings()(input_ids)
-
-        hidden_layer_output = self.model(inputs_embeds=input_embeddings)[1]["hidden_states"][-1]
+            input_embeddings = self.model.get_input_embeddings()(input_ids)
+            output = self.model(inputs_embeds=input_embeddings, output_hidden_states=True)
+            hidden_layer_output = output.hidden_states[-1]
 
         if texts is None:
             eos_idx = torch.full((hidden_layer_output.shape[0],), fill_value=-1)
@@ -484,50 +480,12 @@ class LLM(torch.nn.Module):
 
         json.dump(init_kwargs, open(os.path.join(path, "llm_init_kwargs.json"), "w"))
 
+    @cached_property
+    def device(self):
+        return f"cuda:{self.device_map['model.embed_tokens']}"
+
     @classmethod
     def load(cls, path: str):
         # init_kwargs = json.load(open(os.path.join(path, 'llm_init_kwargs.json')))
 
         return cls(model_name_or_path=path)
-
-        return cls(model_name_or_path=path, **init_kwargs)
-
-        # sorry John
-
-        # TODO: Is there a nicer way to do this? :)
-        adapter_config = json.load(open(os.path.join(path, "adapter_config.json")))
-        peft_config = PeftConfig.from_peft_type(**adapter_config)
-        try:
-            init_kwargs = json.load(open(os.path.join(path, "llm_init_kwargs.json")))
-            llm = cls(device_map=init_kwargs["device_map"], peft_config=peft_config)
-            device_map = init_kwargs["device_map"]
-        except:
-            init_kwargs = {}
-            device_map = DEFAULT_DEVICE_MAP
-            llm = cls(peft_config=peft_config, device_map=device_map)
-
-        base_model = AutoModelForCausalLM.from_pretrained(
-            pretrained_model_name_or_path=adapter_config["base_model_name_or_path"],
-            quantization_config=llm.bnb_config,
-            torch_dtype=torch.float16,
-            attn_implementation="sdpa",
-            device_map=device_map,
-        )
-        print(llm.bnb_config)
-        peft_model = PeftModelForCausalLM.from_pretrained(base_model, path, is_trainable=True)
-        tokenizer = AutoTokenizer.from_pretrained(
-            pretrained_model_name_or_path=path,
-            torch_dtype=torch.float16,
-            padding=True,
-            device_map="auto",
-            padding_side="right",
-        )
-
-        llm.model = peft_model
-        llm.tokenizer = tokenizer
-        llm.model.gradient_checkpointing_enable()
-        return llm
-
-    @cached_property
-    def device(self):
-        return f"cuda:{self.device_map['model.embed_tokens']}"

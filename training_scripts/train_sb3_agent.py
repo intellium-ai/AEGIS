@@ -14,6 +14,8 @@ eval_results_df = pd.DataFrame(columns=["corpus_size", "run", "episode", "sum_re
 train_results_df = pd.DataFrame(columns=["corpus_size", "run", "episode", "sum_reward"])
 
 run_timestamp = datetime.now().strftime("%H-%M-%d-%m")
+
+# For each corpus size, train and evaluate model on same laydown for 128 episodes and 128 steps
 for corpus_size in corpus_sizes:
     for run in range(1):
         writer = SummaryWriter(flush_secs=15, log_dir=f"./runs/{run_timestamp}/training_{corpus_size}_nodes")
@@ -52,5 +54,5 @@ for corpus_size in corpus_sizes:
                 "sum_reward": reward,
             }
 
-eval_results_df.to_csv("sb3_eval_results.csv", index=False)
-train_results_df.to_csv("sb3_train_results.csv", index=False)
+eval_results_df.to_csv("./results/sb3_eval_results.csv", index=False)
+train_results_df.to_csv("./results/sb3_train_results.csv", index=False)

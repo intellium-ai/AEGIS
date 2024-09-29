@@ -4,6 +4,9 @@ import os
 import logging
 import random
 import pandas as pd
+import tensorflow as tf
+import numpy as np
+import matplotlib.pyplot as plt
 
 logging.disable(logging.CRITICAL)
 training_laydowns = "/srv/aegis-training-data/laydowns/group_1/laydowns/"
@@ -27,7 +30,7 @@ for idx, laydown in enumerate(laydowns):
         agent = GITAgent(
             training_config_path="../agents/training_configs/git.yaml",
             lay_down_config_path=training_laydowns + laydown,
-            save_path="../notebooks/runs/Sep13_15-54-54_ds-turing02/epoch_4-step_5000/",
+            save_path="./runs/gllm_pretraining_logs_2/epoch_4-step_5000/",
         )
     else:
         agent.reset_env(laydown_config_path=training_laydowns + laydown)
@@ -37,19 +40,3 @@ for idx, laydown in enumerate(laydowns):
     agent._agent.save(save_path)
     first = False
     print(f"Finished with laydown {idx} of {len(laydowns)}")
-
-# Now evaluate the model on networks of sizes 5, 10, 20 and 40 nodes respectively for 128 episodes of 128 steps.
-for corpus_size in corpus_sizes:
-    agent.reset_env(
-        laydown_config_path=evaluation_laydowns + corpus_size + "_nodes.yaml",
-    )
-
-    sum_ep_rewards = agent.evaluate()
-    for episode, reward in enumerate(sum_ep_rewards):
-        eval_results_df.loc[len(eval_results_df)] = {
-            "corpus_size": corpus_size,
-            "episode": episode + 1,
-            "sum_reward": reward,
-        }
-
-    eval_results_df.to_csv("git_eval_results.csv", index=False)

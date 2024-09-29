@@ -1,160 +1,70 @@
-# Intelli - Setup instructions
+# Intellium AEGIS Project
+<div style="text-align:center">
+<img src="./tower_defense.png" width="200" height="200" alt="Image description">
+</div>
 
-`python3 -m venv venv`
+Welcome to [Intellium AI's](intellium.ai) AEGIS Project!
 
-`source venv/bin/activate`
+This repository contains an adapted version of the [ARCD PrimAITE](https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE) Reinforcement Learning environment which includes the following changes / adaptations:
+- Bug Fixes.
+- Environment observability framework in Streamlit.
+- Simplified integration of customised agents, in particular, Large Language Models.
+- All practical work conducted as part of Task D2008d "Enhancing Situational Awareness of Language-based Blue Agents through Graph Neural Prompting" for the [Alan Turing Institute](turing.ac.uk).
 
-`pip install -e '.[dev]'`
-Go!
+## Prerequisites and Disclaimer:
+- Ubuntu 22.04.4 LTS.
+- A machine with 4 GPUs, preferably 4x NVidia RTX 3090 (24GB) cards.
+- Ensure you have Python 3.10.12 installed.
+- Ensure you have GPU hardware on your machine with CUDA support.
 
-# PrimAITE
 
-![image](./PrimAITE_logo_transparent.png)
+We developed using this configuration and therefore have been able to validate the execution of our code for this setup. While you do not have to use the same hardware, OS or Python version, we will not be able to offer support for setup or debug problems if we are unable to replicate issues that you may experience as a result.
 
-The ARCD Primary-level AI Training Environment (**PrimAITE**) provides an effective simulation capability for the purposes of training and evaluating AI in a cyber-defensive role. It incorporates the functionality required of a primary-level ARCD environment, which includes:
+## Setup Instructions:
+- Clone this repository locally.
+- Install the PrimAITE environment with additional AEGIS dependencies:
+    - `python3 -m venv aegis`
+    - `source aegis/bin/activate`
+    - `pip install -e '.[dev]'`
+    - Check if torch can interface with your GPU(s) using `import torch; print(torch.cuda.is_available())`.
 
-- The ability to model a relevant platform / system context;
-- The ability to model key characteristics of a platform / system by representing connections, IP addresses, ports, traffic loading, operating systems and services;
-- Operates at machine-speed to enable fast training cycles.
+## Working with CUDA
+If you do not have the same number of GPUs, we advise you to reconfigure the DEFAULT_DEVICE_MAP we have setup in 
+[llm.py](/src/primaite/agents/aegis/modules/llm.py) accordingly.
 
-PrimAITE presents the following features:
+## Usage
+We recommend you familiarise yourself with the original PrimAITE [README](https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE/blob/dev/README.md) if you are not already familiar with the environment.
 
-- Highly configurable (via YAML files) to provide the means to model a variety of platform / system laydowns, mission profiles and adversarial attack scenarios;
-- A Reinforcement Learning (RL) reward function based on (a) the ability to counter the specific modelled adversarial cyber-attack, and (b) the ability to ensure mission success;
-- Provision of logging to support AI evaluation and metrics gathering;
-- Uses the concept of Information Exchange Requirements (IERs) to model background pattern of life, adversarial behaviour and mission data (on a sliding scale of criticality);
-- An Access Control List (ACL) function, mimicking the behaviour of a network firewall, is applied across the model, following standard ACL rule format (e.g. DENY/ALLOW, source IP address, destination IP address, protocol and port);
-- Application of IERs to the platform / system laydown adheres to the ACL ruleset;
-- Presents an OpenAI gym or RLLib interface to the environment, allowing integration with any compliant defensive agents;
-- Full capture of discrete logs relating to agent training (full system state, agent actions taken, instantaneous and average reward for every step of every episode);
-- NetworkX provides laydown visualisation capability.
 
-## Getting Started with PrimAITE
+### DEMO Notebooks
+We have provided some demonstration notebooks in [DEMO Notebooks](./DEMO%20Notebooks/) which can be used as a reference point for seeing how various components we have developed work. These include:
+1. [PrimAITE Network Laydown Generation](/DEMO%20Notebooks/network_generation.ipynb).
+2. [Use of Vanilla LLM Agent](/DEMO%20Notebooks/2_vanilla_llm_agent.ipynb).
+3. [End-to-end training](/DEMO%20Notebooks/3_e2e_gllm_agent_training.ipynb) of the GLLM agent.
+4. [Graph Large Language Model (GLLM) Pre-training](/DEMO%20Notebooks/4_pre_train_gllm.ipynb).
+5. [Contrastive Learning](/DEMO%20Notebooks/5_contrastive_learning_training.ipynb) experimentation.
+6. [A2C GNN Agent training](/DEMO%20Notebooks/6_train_gnn_agent.ipynb).
+7. Benchmark [SB3 A2C Agent training](/DEMO%20Notebooks/7_train_sb3_agent.ipynb).
+8. Plotting training logs for GLLM [E2E](/DEMO%20Notebooks/8_plot_e2e_training_logs.ipynb) and [pre-training](/DEMO%20Notebooks/8_plot_gllm_training_logs.ipynb) (for transparency).
 
-### 💫 Install & Run
 
-**PrimAITE** is designed to be OS-agnostic, and thus should work on most variations/distros of Linux, Windows, and MacOS.
-Currently, the PrimAITE wheel can only be installed from GitHub. This may change in the future with release to PyPi.
+### Module Reference
+- Our implementation for the Vanilla LLM agent can be found in the agents folder [here](/src/primaite/agents/vanilla_llm/).
 
-#### Windows (PowerShell)
+- The GNN agent can be found in the agents folder [here](/src/primaite/agents/gnn_agent.py).
 
-**Prerequisites:**
+- All AEGIS related works, such as the modules used in GLLM pre-training and e2e training can be found within the [aegis folder](/src/primaite/agents/aegis/).
 
-* Manual install of Python >= 3.8 < 3.11
 
-**Install:**
+## Observability Framework
+To use the observability framework, you will need to follow these steps in a terminal from the repo main directory:
+- `cd app/`
+- `streamlit run main.py`
+- Open the URL shown in the output in your browser.
+## Notes
+- For use of the Vanilla LLM agent, we added support for the Fireworks AI API to allow for plug and play. You will need to specify your API key in the LLMAgent initialization as requested [here](src/primaite/agents/vanilla_llm/agent.py).
+- Some notebooks / scripts contain relative filepaths which will not work for you. You will need to adjust these accordingly. This includes:
+    - Removing any references to checkpoints which are not in the repository and starting trainings from scratch.
+    - Replacing references to training / evaluation datasets not included in the repository with new datasets which you generate yourself.
 
-```powershell
-mkdir ~\primaite
-cd ~\primaite
-python3 -m venv .venv
-attrib +h .venv /s /d # Hides the .venv directory
-.\.venv\Scripts\activate
-pip install https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE/releases/download/v2.0.0/primaite-2.0.0-py3-none-any.whl
-primaite setup
-```
-
-**Run:**
-
-```bash
-primaite session
-```
-
-#### Unix
-
-**Prerequisites:**
-
-* Manual install of Python >= 3.8 < 3.11
-
-```bash
-sudo add-apt-repository ppa:deadsnakes/ppa
-sudo apt install python3.10
-sudo apt-get install python3-pip
-sudo apt-get install python3-venv
-```
-
-**Install:**
-
-```bash
-mkdir ~/primaite
-cd ~/primaite
-python3 -m venv .venv
-source .venv/bin/activate
-pip install https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE/releases/download/v2.0.0/primaite-2.0.0-py3-none-any.whl
-primaite setup
-```
-
-**Run:**
-
-```bash
-primaite session
-```
-
-### Developer Install from Source
-
-To make your own changes to PrimAITE, perform the install from source (developer install)
-
-#### 1. Clone the PrimAITE repository
-
-```unix
-git clone git@github.com:Autonomous-Resilient-Cyber-Defence/PrimAITE.git
-```
-
-#### 2. CD into the repo directory
-
-```unix
-cd PrimAITE
-```
-
-#### 3. Create a new python virtual environment (venv)
-
-```unix
-python3 -m venv venv
-```
-
-#### 4. Activate the venv
-
-##### Unix
-
-```bash
-source venv/bin/activate
-```
-
-##### Windows (Powershell)
-
-```powershell
-.\venv\Scripts\activate
-```
-
-#### 5. Install `primaite` with the dev extra into the venv along with all of it's dependencies
-
-```bash
-python3 -m pip install -e .[dev]
-```
-
-#### 6. Perform the PrimAITE setup:
-
-```bash
-primaite setup
-```
-
-## 📚 Building documentation
-
-The PrimAITE documentation can be built with the following commands:
-
-##### Unix
-
-```bash
-cd docs
-make html
-```
-
-##### Windows (Powershell)
-
-```powershell
-cd docs
-.\make.bat html
-```
-
-**Related Environments:**
-You may also wish to explore the Yawning-Titan environment, an abstract, graph based cyber-security simulation environment that supports the training of intelligent agents for autonomous cyber operations: https://github.com/dstl/YAWNING-TITAN
+<b>We hope you enjoy.</b>
