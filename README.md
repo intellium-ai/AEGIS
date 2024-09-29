@@ -3,13 +3,13 @@
 <img src="./tower_defense.png" width="200" height="200" alt="Image description">
 </div>
 
-Welcome to [Intellium AI's](intellium.ai) AEGIS Project!
+Welcome to [Intellium AI's](https://www.intellium.ai) AEGIS Project!
 
 This repository contains an adapted version of the [ARCD PrimAITE](https://github.com/Autonomous-Resilient-Cyber-Defence/PrimAITE) Reinforcement Learning environment which includes the following changes / adaptations:
 - Bug Fixes.
 - Environment observability framework in Streamlit.
 - Simplified integration of customised agents, in particular, Large Language Models.
-- All practical work conducted as part of Task D2008d "Enhancing Situational Awareness of Language-based Blue Agents through Graph Neural Prompting" for the [Alan Turing Institute](turing.ac.uk).
+- All practical work conducted as part of Task D2008d "Enhancing Situational Awareness of Language-based Blue Agents through Graph Neural Prompting" for the [Alan Turing Institute](https://www.turing.ac.uk).
 
 ## Prerequisites and Disclaimer:
 - Ubuntu 22.04.4 LTS.
