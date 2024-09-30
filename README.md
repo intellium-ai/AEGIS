@@ -38,7 +38,7 @@ We recommend you familiarise yourself with the original PrimAITE [README](https:
 
 ### DEMO Notebooks
 We have provided some demonstration notebooks in [DEMO Notebooks](./DEMO%20Notebooks/) which can be used as a reference point for seeing how various components we have developed work. These include:
-1. [PrimAITE Network Laydown Generation](/DEMO%20Notebooks/network_generation.ipynb).
+1. [PrimAITE Network Laydown Generation](/DEMO%20Notebooks/1_network_generation.ipynb).
 2. [Use of Vanilla LLM Agent](/DEMO%20Notebooks/2_vanilla_llm_agent.ipynb).
 3. [End-to-end training](/DEMO%20Notebooks/3_e2e_gllm_agent_training.ipynb) of the GLLM agent.
 4. [Graph Large Language Model (GLLM) Pre-training](/DEMO%20Notebooks/4_pre_train_gllm.ipynb).
@@ -62,7 +62,7 @@ To use the observability framework, you will need to follow these steps in a ter
 - `streamlit run main.py`
 - Open the URL shown in the output in your browser.
 ## Notes
-- For use of the Vanilla LLM agent, we added support for the Fireworks AI API to allow for plug and play. You will need to specify your API key in the LLMAgent initialization as requested [here](src/primaite/agents/vanilla_llm/agent.py).
+- For use of the Vanilla LLM agent, we added support for the [Fireworks](https://www.fireworks.ai) AI API to allow for plug and play. You will need to specify your API key in the LLMAgent initialization as requested [here](src/primaite/agents/vanilla_llm/agent.py).
 - Some notebooks / scripts contain relative filepaths which will not work for you. You will need to adjust these accordingly. This includes:
     - Removing any references to checkpoints which are not in the repository and starting trainings from scratch.
     - Replacing references to training / evaluation datasets not included in the repository with new datasets which you generate yourself.
