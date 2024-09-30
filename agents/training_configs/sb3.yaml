@@ -30,7 +30,7 @@ agent_identifier: A2C
 # Options are:
 # True
 # False
-random_red_agent: False
+random_red_agent: True
 
 # The (integer) seed to be used in random number generation
 # Default is None (null)
@@ -67,13 +67,13 @@ observation_space:
 load_agent: True
 
 # Number of episodes for training to run per session
-num_train_episodes: 512
+num_train_episodes: 128
 
 # Number of time_steps for training per episode
 num_train_steps: 128
 
 # Number of episodes for evaluation to run per session
-num_eval_episodes: 8
+num_eval_episodes: 128
 
 # Number of time_steps for evaluation per episode
 num_eval_steps: 128

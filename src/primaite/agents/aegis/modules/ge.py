@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge
+from torch_geometric.nn import GATConv, LayerNorm, global_add_pool, JumpingKnowledge, global_mean_pool
 from torch_geometric.data.batch import Batch
 import logging
 import json
@@ -13,7 +13,7 @@ logging.getLogger().setLevel(logging.INFO)
 
 class GraphEmbedding(nn.Module):
     def __init__(
-        self, in_channels, output_dim, hidden_dim, n_tokens: int = 10, device: str = "cuda:0", n_gat_layers: int = 3
+        self, in_channels, output_dim, hidden_dim, n_tokens: int = 100, device: str = "cuda:0", n_gat_layers: int = 3
     ):
         super().__init__()
         self.gat = GATConv(in_channels=in_channels, out_channels=hidden_dim)
@@ -41,7 +41,7 @@ class GraphEmbedding(nn.Module):
         else:
             x = x
 
-        x = global_add_pool(x=x, batch=graph_batch.batch)
+        x = global_mean_pool(x=x, batch=graph_batch.batch.to(self.device))
         x = F.relu(x)
         x = self.linear(x)
         x = x.view(graph_batch.batch_size, self.n_tokens, self.output_dim)  # Reshape to (n_tokens, output_dim)

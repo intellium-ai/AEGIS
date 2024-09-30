@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from logging import Logger
 from pathlib import Path
-from typing import Any, Optional, Union, Type
+from typing import Any, Optional, Union, Type, List
 
 import numpy as np
 from stable_baselines3.a2c.a2c import A2C
@@ -148,7 +148,7 @@ class SB3Agent(AgentSessionABC):
     def learn(
         self,
         **kwargs: Any,
-    ) -> None:
+    ) -> List:
         """
         Train the agent.
 
@@ -158,9 +158,13 @@ class SB3Agent(AgentSessionABC):
         episodes = self._training_config.num_train_episodes
         self.is_eval = False
         _LOGGER.info(f"Beginning learning for {episodes} episodes @" f" {time_steps} time steps...")
+        ep_rewards = []
         for i in range(episodes):
             self._agent.learn(total_timesteps=time_steps)
+            self._env.average_reward
+            ep_rewards.append(self._env.total_reward)
             self._save_checkpoint()
+
         self._env._write_av_reward_per_episode()  # noqa
         self.save()
         self._env.close()
@@ -170,6 +174,7 @@ class SB3Agent(AgentSessionABC):
         self.save()
 
         self._plot_av_reward_per_episode(learning_session=True)
+        return ep_rewards
 
     def _calculate_action(self, obs: np.ndarray) -> int:
         action, _states = self._agent.predict(obs, deterministic=self._training_config.deterministic)
@@ -180,7 +185,7 @@ class SB3Agent(AgentSessionABC):
     def evaluate(
         self,
         **kwargs: Any,
-    ) -> None:
+    ) -> List:
         """
         Evaluate the agent.
 
@@ -190,6 +195,7 @@ class SB3Agent(AgentSessionABC):
         episodes = self._training_config.num_eval_episodes
         self._env.set_as_eval()
         self.is_eval = True
+        ep_rewards = []
         if self._training_config.deterministic:
             deterministic_str = "deterministic"
         else:
@@ -203,9 +209,11 @@ class SB3Agent(AgentSessionABC):
             for step in range(time_steps):
                 action = self._calculate_action(obs)
                 obs, rewards, done, info = self._env.step(action)
+            ep_rewards.append(self._env.total_reward)
         self._env._write_av_reward_per_episode()  # noqa
         self._env.close()
         super().evaluate()
+        return ep_rewards
 
     def save(self) -> None:
         """Save the agent."""
